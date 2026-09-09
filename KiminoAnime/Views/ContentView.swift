@@ -1,24 +1,10 @@
-//
-//  ContentView.swift
-//  KiminoAnime
-//
-//  Created by Aung Myat Oo Gyaw on 9/9/26.
-//
-
 import SwiftUI
 
-struct ContentView: View {
-    var body: some View {
-        VStack {
-            Image(systemName: "globe")
-                .imageScale(.large)
-                .foregroundStyle(.tint)
-            Text("Hello, world!")
+@main
+struct KiminoAnimeApp: App {
+    var body: some Scene {
+        WindowGroup {
+            ContentView()
         }
-        .padding()
     }
-}
-
-#Preview {
-    ContentView()
 }
