@@ -1,12 +1,35 @@
+//
+//  KitsuResource.swift
+//  KiminoAnime
+//
+//  NOTE (Anuson, 9/22): marked KitsuDocument and KitsuResource `nonisolated`
+//  at the type level (their individual methods/properties below keep their
+//  own `nonisolated` too, which is harmless and self-documenting). Root
+//  cause: the project turns on Swift 6's "approachable concurrency" default
+//  isolation
+//  (SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor in project.pbxproj), which
+//  makes every un-annotated method/computed property/static property in the
+//  module implicitly @MainActor-isolated. KitsuClient is its own `actor`,
+//  and it was calling these KitsuResource/KitsuDocument members
+//  synchronously from inside plain .map/.filter/.compactMap closures (see
+//  KitsuClient.swift: map(_:included:), page(_:safeOnly:...), search(...),
+//  characters(animeId:), recommendations(animeId:)) — a cross-actor
+//  synchronous call, which Swift 6 rejects at compile time. These are pure
+//  value types with no shared mutable state, so `nonisolated` is the
+//  correct fix rather than making them async or MainActor-bound.
+//  Aung — please review; this was the ~22-error build failure after the
+//  AnimeResponse/RecommendationEntry fix landed.
+//
+
 import Foundation
 
-struct KitsuDocument<T: Decodable>: Decodable {
+nonisolated struct KitsuDocument<T: Decodable>: Decodable {
     let data: T
     let included: [KitsuResource]?
     let links: Links?
     struct Links: Decodable { let next: String? }
 
-    func pagination(page: Int) -> Pagination {
+    nonisolated func pagination(page: Int) -> Pagination {
         let hasNext = links?.next != nil
         return Pagination(lastVisiblePage: page + (hasNext ? 1 : 0), hasNextPage: hasNext, items: nil)
     }
@@ -14,7 +37,7 @@ struct KitsuDocument<T: Decodable>: Decodable {
 
 /// JSON:API resources share a common envelope. Related resources are resolved
 /// by both type and ID; numeric IDs alone are not unique across resource types.
-struct KitsuResource: Decodable {
+nonisolated struct KitsuResource: Decodable {
     let id: String
     let type: String
     let attributes: Attributes
@@ -68,12 +91,12 @@ struct KitsuResource: Decodable {
             if let array = try? container.decode([Reference].self) { self = .many(array) }
             else { self = .one(try container.decode(Reference.self)) }
         }
-        var values: [Reference] {
+        nonisolated var values: [Reference] {
             switch self { case .one(let value): [value]; case .many(let values): values }
         }
     }
 
-    func related(_ name: String, in included: [KitsuResource]) -> [KitsuResource] {
+    nonisolated func related(_ name: String, in included: [KitsuResource]) -> [KitsuResource] {
         (relationships?[name]?.data?.values ?? []).compactMap { reference in
             included.first { $0.id == reference.id && $0.type == reference.type }
         }
@@ -81,8 +104,8 @@ struct KitsuResource: Decodable {
 
     // Positive IDs remain compatible with existing MAL-based My List records.
     // Reserve a separate negative range from the previous AniList-only IDs.
-    static let identityOffset = 1_000_000_000
-    func anime(in included: [KitsuResource]) throws -> Anime {
+    nonisolated static let identityOffset = 1_000_000_000
+    nonisolated func anime(in included: [KitsuResource]) throws -> Anime {
         guard type == "anime", let kitsuID = Int(id) else { throw APIError.badResponse }
         let malID = related("mappings", in: included).first {
             $0.attributes.externalSite == "myanimelist/anime"
@@ -119,12 +142,12 @@ struct KitsuResource: Decodable {
         return anime
     }
 
-    var category: MalRef? {
+    nonisolated var category: MalRef? {
         guard type == "categories", let id = Int(id), let title = attributes.title else { return nil }
         return MalRef(malId: id, type: attributes.slug, name: title, url: nil)
     }
 
-    func character(in included: [KitsuResource]) -> AnimeCharacterEntry? {
+    nonisolated func character(in included: [KitsuResource]) -> AnimeCharacterEntry? {
         guard let character = related("character", in: included).first, let id = Int(character.id) else { return nil }
         let a = character.attributes
         return AnimeCharacterEntry(character: .init(malId: id, name: a.canonicalName ?? a.name ?? "Unknown",

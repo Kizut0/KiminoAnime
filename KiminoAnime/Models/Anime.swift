@@ -1,5 +1,16 @@
 import Foundation
- 
+
+//  NOTE (Anuson, 9/22): marked `id` (Anime, MalRef) and `displayTitle`
+//  (Anime) `nonisolated`, and added a `nonisolated` convenience initializer
+//  `Anime.init(malId:title:images:)` in an extension below. Same root cause
+//  as the KitsuResource.swift fix: SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor
+//  makes every un-annotated computed property/initializer implicitly
+//  @MainActor-isolated, and KitsuClient (its own actor) reads/constructs
+//  these synchronously in map/filter/compactMap closures (see
+//  KitsuClient.swift lines ~58, 111, 159-160 -- recommendations(animeId:)
+//  in particular needed both the new initializer and `nonisolated` on it
+//  and on `displayTitle` before it would compile). Aung -- please review.
+
 struct Anime: Codable, Identifiable, Hashable {
  
     // MARK: Identity
@@ -51,10 +62,10 @@ struct Anime: Codable, Identifiable, Hashable {
     let producers: [MalRef]?
  
     // MARK: Derived
-    var id: Int { malId }
+    nonisolated var id: Int { malId }
  
     /// English title when we have one, otherwise the romanised title.
-    var displayTitle: String {
+    nonisolated var displayTitle: String {
         if let e = titleEnglish, !e.isEmpty { return e }
         return title
     }
@@ -81,6 +92,32 @@ struct Anime: Codable, Identifiable, Hashable {
  
 // MARK: - Sub-models
  
+//  NOTE (Anuson, 9/22): added the init(malId:title:images:) convenience
+//  initializer below. Root cause: KitsuClient.swift's recommendations(_:)
+//  builds a lightweight RecommendationEntry.entry via
+//  `.init(malId: $0.id, title: $0.displayTitle, images: $0.images)`, but
+//  Anime had no matching 3-argument initializer -- only the full
+//  ~29-argument memberwise one. Swift couldn't find a matching overload and
+//  fell back to comparing against Decodable's `init(from:)`, which is why
+//  Xcode reported the confusing "Missing argument for parameter 'from'" /
+//  "Extra arguments at positions #1, #2, #3" pair at KitsuClient.swift:160
+//  instead of a clear "no matching initializer" error. This was masked
+//  until RecommendationEntry.swift existed for the compiler to check this
+//  far. Put in an extension (not the main struct body) so the existing
+//  full memberwise init KitsuResource.anime(in:) relies on keeps working.
+//  Aung -- please review; let me know if the "Related anime" rail should
+//  carry more fields than title + poster.
+extension Anime {
+    nonisolated init(malId: Int, title: String, images: AnimeImages) {
+        self.init(malId: malId, url: nil, title: title, titleEnglish: nil, titleJapanese: nil,
+            type: nil, source: nil, episodes: nil, status: nil, airing: nil, duration: nil,
+            rating: nil, score: nil, scoredBy: nil, rank: nil, popularity: nil, members: nil,
+            favorites: nil, synopsis: nil, background: nil, season: nil, year: nil, aired: nil,
+            images: images, trailer: nil, genres: nil, themes: nil, demographics: nil,
+            studios: nil, producers: nil)
+    }
+}
+
 struct AnimeImages: Codable, Hashable {
     let jpg: ImageSet
  
@@ -99,7 +136,7 @@ struct MalRef: Codable, Hashable, Identifiable {
     let name: String
     let url: String?
  
-    var id: Int { malId }
+    nonisolated var id: Int { malId }
 }
  
 struct DateRange: Codable, Hashable {

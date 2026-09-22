@@ -1,9 +1,27 @@
 import Foundation
- 
+
+//  NOTE (Anuson, 9/22): marked DiskCache `nonisolated`. Root cause: the
+//  project turns on Swift 6's "approachable concurrency" default isolation
+//  (SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor in project.pbxproj), which
+//  made DiskCache's un-annotated static save/load implicitly
+//  @MainActor-isolated. DiscoverViewModel.swift's init uses them as
+//  *default parameter values* (readCache/saveCache), and Swift evaluates a
+//  function's default-argument expressions in a nonisolated context even
+//  when the function itself is @MainActor -- so that was a cross-actor
+//  synchronous call and a hard Swift 6 error (DiscoverViewModel.swift:38-39).
+//  This didn't need any change to the actual caching logic, just the
+//  isolation annotation. I checked Preferences.swift's RecentSearches too --
+//  its call sites are all through @MainActor-isolated stored-property
+//  defaults (fine as-is), not function-parameter defaults, so it isn't
+//  hitting this bug right now and I left it alone.
+//  Hsu -- please review; flagging since your commit said "debugging
+//  required" and I don't want to step on whatever else you're still
+//  checking here.
+//
 /// JSON snapshots of API responses, so Discover renders offline.
 /// Lives in Caches/ — iOS may reclaim it under storage pressure,
 /// which is correct for data we can always refetch.
-enum DiskCache {
+nonisolated enum DiskCache {
  
     private static var directory: URL {
         let base = FileManager.default.urls(
