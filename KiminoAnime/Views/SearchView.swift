@@ -80,9 +80,11 @@ private extension SearchView {
                             Button { query = term } label: {
                                 HStack {
                                     Image(systemName: "clock.arrow.circlepath").foregroundStyle(Theme.Colors.secondary)
+                                        .accessibilityHidden(true)
                                     Text(term).foregroundStyle(Theme.Colors.primary)
                                     Spacer()
                                     Image(systemName: "arrow.up.left").font(.caption).foregroundStyle(Theme.Colors.secondary)
+                                        .accessibilityHidden(true)
                                 }
                                 .padding(.vertical, Theme.Space.md).padding(.horizontal, Theme.Space.screen)
                             }

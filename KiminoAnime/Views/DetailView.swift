@@ -194,8 +194,11 @@ struct StatLine: View {
     var body: some View {
         HStack(spacing: Theme.Space.sm) {
             Image(systemName: symbol).font(.caption).foregroundStyle(Theme.Colors.accent).frame(width: 16)
+                .accessibilityHidden(true)
             Text(label).font(Theme.Text.meta).foregroundStyle(Theme.Colors.secondary)
             Text(value).font(.caption.weight(.semibold)).foregroundStyle(Theme.Colors.primary)
         }
+        // T11.3: read as one sentence ("Ranked, #12") instead of three fragments.
+        .accessibilityElement(children: .combine)
     }
 }
