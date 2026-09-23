@@ -1,11 +1,3 @@
-//
-//  ShimmerView.swift
-//  KiminoAnime
-//
-//  T4.4 — every image placeholder in the app uses this. A grey box
-//  says "unfinished"; a shimmer says "loading".
-//
-
 import SwiftUI
 
 struct ShimmerView: View {

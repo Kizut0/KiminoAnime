@@ -1,26 +1,3 @@
-//
-//  KitsuResource.swift
-//  KiminoAnime
-//
-//  NOTE (Anuson, 9/22): marked KitsuDocument and KitsuResource `nonisolated`
-//  at the type level (their individual methods/properties below keep their
-//  own `nonisolated` too, which is harmless and self-documenting). Root
-//  cause: the project turns on Swift 6's "approachable concurrency" default
-//  isolation
-//  (SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor in project.pbxproj), which
-//  makes every un-annotated method/computed property/static property in the
-//  module implicitly @MainActor-isolated. KitsuClient is its own `actor`,
-//  and it was calling these KitsuResource/KitsuDocument members
-//  synchronously from inside plain .map/.filter/.compactMap closures (see
-//  KitsuClient.swift: map(_:included:), page(_:safeOnly:...), search(...),
-//  characters(animeId:), recommendations(animeId:)) — a cross-actor
-//  synchronous call, which Swift 6 rejects at compile time. These are pure
-//  value types with no shared mutable state, so `nonisolated` is the
-//  correct fix rather than making them async or MainActor-bound.
-//  Aung — please review; this was the ~22-error build failure after the
-//  AnimeResponse/RecommendationEntry fix landed.
-//
-
 import Foundation
 
 nonisolated struct KitsuDocument<T: Decodable>: Decodable {
@@ -35,8 +12,7 @@ nonisolated struct KitsuDocument<T: Decodable>: Decodable {
     }
 }
 
-/// JSON:API resources share a common envelope. Related resources are resolved
-/// by both type and ID; numeric IDs alone are not unique across resource types.
+
 nonisolated struct KitsuResource: Decodable {
     let id: String
     let type: String

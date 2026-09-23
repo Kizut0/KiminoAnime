@@ -1,11 +1,3 @@
-//
-//  StateViews.swift
-//  KiminoAnime
-//
-//  T4.9 — shared loading / error / empty state views so every screen
-//  fails and recovers the same way instead of inventing its own.
-//
-
 import SwiftUI
 
 struct LoadingStateView: View {
@@ -28,9 +20,11 @@ struct ErrorStateView: View {
 
     var body: some View {
         ContentUnavailableView {
-            Label("Something went wrong", systemImage: error.symbol)
+            Label(error == .offline ? "You're offline" : "Something went wrong", systemImage: error.symbol)
         } description: {
-            Text(error.errorDescription ?? "Please try again.")
+            Text(error == .offline
+                 ? "Connect to the internet to load this content."
+                 : (error.errorDescription ?? "Please try again."))
         } actions: {
             if error.isRetryable, let retry {
                 Button("Try again") {

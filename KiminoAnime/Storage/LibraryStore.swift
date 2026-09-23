@@ -120,6 +120,55 @@ struct LibraryStore {
         save()
     }
 
+    /// Keep server-owned fields current without changing watch progress.
+    func cacheDetail(_ anime: Anime) {
+        guard let saved = entry(for: anime.malId),
+              let encoded = try? JSONEncoder().encode(anime)
+        else { return }
+
+        let nextPosterURL = anime.images.jpg.largeImageUrl
+            ?? anime.images.jpg.imageUrl
+        if saved.imageUrl != nextPosterURL { saved.posterData = nil }
+        saved.detailData = encoded
+        saved.title = anime.displayTitle
+        saved.imageUrl = nextPosterURL
+        saved.score = anime.score
+        saved.type = anime.type
+        saved.year = anime.year
+        saved.totalEpisodes = anime.episodes
+        if let total = anime.episodes {
+            saved.episodesWatched = min(saved.episodesWatched, max(0, total))
+        }
+        saved.genreNames = anime.genreNames
+        save()
+    }
+
+    func cacheCharacters(_ characters: [AnimeCharacterEntry], for malId: Int) {
+        guard let saved = entry(for: malId),
+              let encoded = try? JSONEncoder().encode(characters)
+        else { return }
+        saved.charactersData = encoded
+        save()
+    }
+
+    func cacheRecommendations(_ recommendations: [RecommendationEntry], for malId: Int) {
+        guard let saved = entry(for: malId),
+              let encoded = try? JSONEncoder().encode(recommendations)
+        else { return }
+        saved.recommendationsData = encoded
+        save()
+    }
+
+    func cachePoster(_ data: Data, for malId: Int, url: URL?) {
+        guard let saved = entry(for: malId),
+              saved.posterURL == url,
+              saved.posterData == nil,
+              data.count <= 4_000_000
+        else { return }
+        saved.posterData = data
+        save()
+    }
+
     func removeAll() {
         do {
             try context.delete(model: SavedAnime.self)

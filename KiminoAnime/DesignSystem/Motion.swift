@@ -1,12 +1,3 @@
-//
-//  Motion.swift
-//  KiminoAnime
-//
-//  T4.3 — named animation tokens. Naming them means every screen
-//  feels like the same app, and reduced-motion becomes a one-line
-//  change instead of a hunt.
-//
-
 import SwiftUI
 
 enum Motion {

@@ -61,6 +61,12 @@ final class SavedAnime {
     var year: Int?
     var totalEpisodes: Int?
     var genreNames: [String]
+    /// Last successful API detail and supporting sections. Optional fields
+    /// keep existing SwiftData libraries readable after the app updates.
+    var detailData: Data?
+    var charactersData: Data?
+    var recommendationsData: Data?
+    var posterData: Data?
 
     // MARK: User Data
 
@@ -126,6 +132,10 @@ final class SavedAnime {
         self.year = anime.year
         self.totalEpisodes = anime.episodes
         self.genreNames = anime.genreNames
+        self.detailData = nil
+        self.charactersData = nil
+        self.recommendationsData = nil
+        self.posterData = nil
 
         self.episodesWatched = 0
         self.statusRaw = status.rawValue
@@ -133,5 +143,70 @@ final class SavedAnime {
         self.note = ""
         self.dateAdded = .now
         self.dateUpdated = .now
+    }
+}
+
+// MARK: - Offline detail snapshot
+
+@MainActor
+extension SavedAnime {
+    /// Prefer the last full API response; older records still have the
+    /// original summary fields until they can be refreshed online.
+    var offlineAnime: Anime {
+        if let detailData,
+           let cached = try? JSONDecoder().decode(Anime.self, from: detailData) {
+            return cached
+        }
+
+        let imageSet = AnimeImages.ImageSet(
+            imageUrl: imageUrl,
+            smallImageUrl: imageUrl,
+            largeImageUrl: imageUrl
+        )
+
+        return Anime(
+            malId: malId,
+            url: nil,
+            title: title,
+            titleEnglish: nil,
+            titleJapanese: nil,
+            type: type,
+            source: nil,
+            episodes: totalEpisodes,
+            status: nil,
+            airing: nil,
+            duration: nil,
+            rating: nil,
+            score: score,
+            scoredBy: nil,
+            rank: nil,
+            popularity: nil,
+            members: nil,
+            favorites: nil,
+            synopsis: nil,
+            background: nil,
+            season: nil,
+            year: year,
+            aired: nil,
+            images: AnimeImages(jpg: imageSet),
+            trailer: nil,
+            genres: genreNames.enumerated().map { index, name in
+                MalRef(malId: -(index + 1), type: "genres", name: name, url: nil)
+            },
+            themes: nil,
+            demographics: nil,
+            studios: nil,
+            producers: nil
+        )
+    }
+
+    var offlineCharacters: [AnimeCharacterEntry] {
+        guard let charactersData else { return [] }
+        return (try? JSONDecoder().decode([AnimeCharacterEntry].self, from: charactersData)) ?? []
+    }
+
+    var offlineRecommendations: [RecommendationEntry] {
+        guard let recommendationsData else { return [] }
+        return (try? JSONDecoder().decode([RecommendationEntry].self, from: recommendationsData)) ?? []
     }
 }

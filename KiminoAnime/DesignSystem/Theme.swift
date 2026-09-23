@@ -1,11 +1,3 @@
-//
-//  Theme.swift
-//  KiminoAnime
-//
-//  T4.2 — spacing, radius, typography, colour tokens.
-//  After this file, no view hard-codes a number.
-//
-
 import SwiftUI
 
 enum Theme {

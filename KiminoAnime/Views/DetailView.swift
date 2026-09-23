@@ -13,16 +13,55 @@ struct DetailView: View {
     init(anime: Anime) { seed = anime; animeId = anime.malId }
     init(animeId: Int) { seed = nil; self.animeId = animeId }
 
+    private var availableAnime: Anime? {
+        let saved = store.entry(for: animeId)
+        if let saved, saved.detailData != nil { return saved.offlineAnime }
+        return DiskCache.load(OfflineCacheKey.detail(animeId), as: Anime.self)
+            ?? saved?.offlineAnime ?? seed
+    }
+
+    private func refreshDetails() async {
+        let saved = store.entry(for: animeId)
+        if let saved, saved.detailData == nil,
+           let cached = DiskCache.load(OfflineCacheKey.detail(animeId), as: Anime.self) {
+            store.cacheDetail(cached)
+        }
+        await vm.load(
+            seed: vm.anime ?? availableAnime,
+            id: animeId,
+            cachedCharacters: saved?.charactersData != nil
+                ? (saved?.offlineCharacters ?? [])
+                : (DiskCache.load(OfflineCacheKey.characters(animeId), as: [AnimeCharacterEntry].self) ?? []),
+            cachedRecommendations: saved?.recommendationsData != nil
+                ? (saved?.offlineRecommendations ?? [])
+                : (DiskCache.load(OfflineCacheKey.recommendations(animeId), as: [RecommendationEntry].self) ?? []),
+            onDetailLoaded: {
+                DiskCache.save($0, as: OfflineCacheKey.detail(animeId))
+                store.cacheDetail($0)
+            },
+            onCharactersLoaded: {
+                DiskCache.save($0, as: OfflineCacheKey.characters(animeId))
+                store.cacheCharacters($0, for: animeId)
+            },
+            onRecommendationsLoaded: {
+                DiskCache.save($0, as: OfflineCacheKey.recommendations(animeId))
+                store.cacheRecommendations($0, for: animeId)
+            }
+        )
+    }
+
     var body: some View {
         Group {
-            if let anime = vm.anime { content(anime) }
-            else if let error = vm.error { ErrorStateView(error: error) { await vm.load(seed: seed, id: animeId) } }
+            // Any saved title can render from SwiftData, including routes
+            // that navigate by ID rather than from a My List row.
+            if let anime = vm.anime ?? availableAnime { content(anime) }
+            else if let error = vm.error { ErrorStateView(error: error) { await refreshDetails() } }
             else { LoadingStateView() }
         }
         .background(Theme.Colors.background)
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
-        .task { await vm.load(seed: seed, id: animeId) }
+        .task { await refreshDetails() }
     }
 
     private func content(_ anime: Anime) -> some View {
@@ -35,7 +74,7 @@ struct DetailView: View {
                         error: error,
                         isLoading: vm.isLoading
                     ) {
-                        await vm.load(seed: anime, id: anime.malId)
+                        await refreshDetails()
                     }
                     .padding(.top, Theme.Space.md)
                 }
@@ -62,7 +101,12 @@ struct DetailView: View {
         GeometryReader { geo in
             let minY = geo.frame(in: .named("detailScroll")).minY
             let stretch = systemReduceMotion ? 0 : max(0, minY)
-            CachedAsyncImage(url: anime.posterURL, cornerRadius: 0)
+            CachedAsyncImage(
+                url: anime.posterURL,
+                cornerRadius: 0,
+                cachedData: store.entry(for: anime.malId)?.posterData,
+                onImageLoaded: { store.cachePoster($0, for: anime.malId, url: anime.posterURL) }
+            )
                 .frame(width: geo.size.width, height: 460 + stretch)
                 .clipped()
                 .posterScrim()
@@ -121,7 +165,16 @@ private extension DetailView {
         }
         .padding(.horizontal, Theme.Space.screen)
         .confirmationDialog("Add to My List", isPresented: $showStatusPicker, titleVisibility: .visible) {
-            ForEach(WatchStatus.allCases) { status in Button(status.rawValue) { withAnimation(Motion.snappy) { _ = store.add(anime, status: status) } } }
+            ForEach(WatchStatus.allCases) { status in
+                Button(status.rawValue) {
+                    withAnimation(Motion.snappy) { _ = store.add(anime, status: status) }
+                    if vm.hasFreshDetail || DiskCache.load(OfflineCacheKey.detail(anime.malId), as: Anime.self) != nil {
+                        store.cacheDetail(anime)
+                    }
+                    if !vm.characters.isEmpty { store.cacheCharacters(vm.characters, for: anime.malId) }
+                    if !vm.recommendations.isEmpty { store.cacheRecommendations(vm.recommendations, for: anime.malId) }
+                }
+            }
             Button("Cancel", role: .cancel) { }
         }
     }
@@ -131,13 +184,17 @@ private extension DetailView {
             if let genres = anime.genres, !genres.isEmpty {
                 FlowLayout(spacing: Theme.Space.sm) {
                     ForEach(genres) { genre in
-                        NavigationLink {
-                            GenreAnimeView(genre: genre)
-                        } label: {
+                        if genre.malId < 0 {
                             GenreChip(title: genre.name)
+                        } else {
+                            NavigationLink {
+                                GenreAnimeView(genre: genre)
+                            } label: {
+                                GenreChip(title: genre.name)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Browse \(genre.name) anime")
                         }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Browse \(genre.name) anime")
                     }
                 }
                 .padding(.horizontal, Theme.Space.screen)
@@ -169,7 +226,10 @@ private extension DetailView {
                         error: error,
                         isLoading: vm.isLoadingCharacters
                     ) {
-                        await vm.retryCharacters(animeId: animeId)
+                        await vm.retryCharacters(animeId: animeId) {
+                            DiskCache.save($0, as: OfflineCacheKey.characters(animeId))
+                            store.cacheCharacters($0, for: animeId)
+                        }
                     }
                 }
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -194,7 +254,10 @@ private extension DetailView {
                 error: error,
                 isLoading: vm.isLoadingCharacters
             ) {
-                await vm.retryCharacters(animeId: animeId)
+                await vm.retryCharacters(animeId: animeId) {
+                    DiskCache.save($0, as: OfflineCacheKey.characters(animeId))
+                    store.cacheCharacters($0, for: animeId)
+                }
             }
         }
     }
@@ -210,7 +273,10 @@ private extension DetailView {
                         error: error,
                         isLoading: vm.isLoadingRecommendations
                     ) {
-                        await vm.retryRecommendations(animeId: animeId)
+                        await vm.retryRecommendations(animeId: animeId) {
+                            DiskCache.save($0, as: OfflineCacheKey.recommendations(animeId))
+                            store.cacheRecommendations($0, for: animeId)
+                        }
                     }
                 }
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -236,7 +302,10 @@ private extension DetailView {
                 error: error,
                 isLoading: vm.isLoadingRecommendations
             ) {
-                await vm.retryRecommendations(animeId: animeId)
+                await vm.retryRecommendations(animeId: animeId) {
+                    DiskCache.save($0, as: OfflineCacheKey.recommendations(animeId))
+                    store.cacheRecommendations($0, for: animeId)
+                }
             }
         }
     }

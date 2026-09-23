@@ -1,17 +1,3 @@
-//
-//  RootView.swift
-//  KiminoAnime
-//
-//  T5.1 — the tab bar shell. Binding `selection` to @AppStorage means
-//  the app reopens on whichever tab you left — a persistence detail
-//  worth mentioning in the demo for one line of code.
-//
-//  NOTE: PrefKey.lastTab (and PrefKey.safeSearch used
-//  elsewhere) live in Storage/Preferences.swift, which is Part 3
-//  (persistence layer) and is not implemented yet. This file will not
-//  compile until that lands — that's a teammate's task, not a bug here.
-//
-
 import SwiftUI
 
 struct RootView: View {
@@ -40,8 +26,12 @@ struct RootView: View {
             storageErrorMessage = notification.object as? String
                 ?? "Your changes could not be saved. Please try again."
         }
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("offlineCacheSaveFailed"))) { notification in
+            storageErrorMessage = notification.object as? String
+                ?? "Offline browsing data could not be saved."
+        }
         .alert(
-            "Couldn't save changes",
+            "Couldn't save data",
             isPresented: Binding(
                 get: { storageErrorMessage != nil },
                 set: { if !$0 { storageErrorMessage = nil } }

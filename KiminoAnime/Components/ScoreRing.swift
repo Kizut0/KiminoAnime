@@ -1,10 +1,3 @@
-//
-//  ScoreRing.swift
-//  KiminoAnime
-//
-//  T4.7 — animated score ring for the Detail screen header.
-//
-
 import SwiftUI
 
 struct ScoreRing: View {

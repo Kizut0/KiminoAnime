@@ -1,11 +1,3 @@
-//
-//  SettingsView.swift
-//  KiminoAnime
-//
-//  Placeholder created in T5.1 so the tab bar compiles.
-//  Real implementation is Part 10 (Screen 5 — Settings), owned by Hsu.
-//
-
 import SwiftUI
 import SwiftData
 
@@ -15,6 +7,7 @@ struct SettingsView: View {
     @AppStorage(PrefKey.safeSearch) private var safeSearch = true
     @AppStorage(PrefKey.appearance) private var appearance = AppAppearance.system
     @State private var cacheSize = DiskCache.formattedSize
+    @State private var showClearCacheConfirm = false
     @State private var showClearListConfirm = false
 
     var body: some View {
@@ -49,8 +42,18 @@ private extension SettingsView {
         Section("Storage") {
             LabeledContent("Saved titles", value: "\(saved.count)")
             LabeledContent("Cached responses", value: cacheSize)
-            Button("Clear cache") { DiskCache.clear(); Task { await ImageCache.shared.clear() }; withAnimation { cacheSize = DiskCache.formattedSize } }
+            Button("Clear browse cache") { showClearCacheConfirm = true }
             Button("Clear My List", role: .destructive) { showClearListConfirm = true }.disabled(saved.isEmpty)
+        }
+        .confirmationDialog("Remove saved browsing data?", isPresented: $showClearCacheConfirm, titleVisibility: .visible) {
+            Button("Clear browse cache", role: .destructive) {
+                DiskCache.clear()
+                Task { await ImageCache.shared.clear() }
+                withAnimation { cacheSize = DiskCache.formattedSize }
+            }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("Discover, Search, and genre results may no longer be available offline. My List and its saved details will remain.")
         }
         .confirmationDialog("Remove all \(saved.count) saved titles?", isPresented: $showClearListConfirm, titleVisibility: .visible) {
             Button("Delete everything", role: .destructive) { LibraryStore(context: context).removeAll() }

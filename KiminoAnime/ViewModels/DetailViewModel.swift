@@ -11,13 +11,25 @@ final class DetailViewModel {
     private(set) var isLoading = false
     private(set) var isLoadingCharacters = false
     private(set) var isLoadingRecommendations = false
+    private(set) var hasFreshDetail = false
 
     private var requestGeneration = UUID()
 
-    func load(seed: Anime?, id: Int) async {
+    func load(
+        seed: Anime?,
+        id: Int,
+        cachedCharacters: [AnimeCharacterEntry] = [],
+        cachedRecommendations: [RecommendationEntry] = [],
+        onDetailLoaded: ((Anime) -> Void)? = nil,
+        onCharactersLoaded: (([AnimeCharacterEntry]) -> Void)? = nil,
+        onRecommendationsLoaded: (([RecommendationEntry]) -> Void)? = nil
+    ) async {
         let generation = UUID()
         requestGeneration = generation
         anime = seed
+        characters = cachedCharacters
+        recommendations = cachedRecommendations
+        hasFreshDetail = false
         isLoading = true
         error = nil
         charactersError = nil
@@ -28,9 +40,16 @@ final class DetailViewModel {
             let full = try await KitsuClient.shared.animeDetail(id: id)
             guard generation == requestGeneration, !Task.isCancelled else { return }
             anime = full.data
+            hasFreshDetail = true
             isLoading = false
             error = nil
-            await loadSupportingContent(animeId: id, generation: generation)
+            onDetailLoaded?(full.data)
+            await loadSupportingContent(
+                animeId: id,
+                generation: generation,
+                onCharactersLoaded: onCharactersLoaded,
+                onRecommendationsLoaded: onRecommendationsLoaded
+            )
         } catch let apiError as APIError {
             guard generation == requestGeneration, !Task.isCancelled else { return }
             isLoading = false
@@ -42,27 +61,52 @@ final class DetailViewModel {
         }
     }
 
-    func retryCharacters(animeId: Int) async {
-        await loadCharacters(animeId: animeId, generation: requestGeneration)
+    func retryCharacters(
+        animeId: Int,
+        onLoaded: (([AnimeCharacterEntry]) -> Void)? = nil
+    ) async {
+        await loadCharacters(
+            animeId: animeId,
+            generation: requestGeneration,
+            onLoaded: onLoaded
+        )
     }
 
-    func retryRecommendations(animeId: Int) async {
-        await loadRecommendations(animeId: animeId, generation: requestGeneration)
+    func retryRecommendations(
+        animeId: Int,
+        onLoaded: (([RecommendationEntry]) -> Void)? = nil
+    ) async {
+        await loadRecommendations(
+            animeId: animeId,
+            generation: requestGeneration,
+            onLoaded: onLoaded
+        )
     }
 
-    private func loadSupportingContent(animeId: Int, generation: UUID) async {
+    private func loadSupportingContent(
+        animeId: Int,
+        generation: UUID,
+        onCharactersLoaded: (([AnimeCharacterEntry]) -> Void)?,
+        onRecommendationsLoaded: (([RecommendationEntry]) -> Void)?
+    ) async {
         async let charactersTask: Void = loadCharacters(
             animeId: animeId,
-            generation: generation
+            generation: generation,
+            onLoaded: onCharactersLoaded
         )
         async let recommendationsTask: Void = loadRecommendations(
             animeId: animeId,
-            generation: generation
+            generation: generation,
+            onLoaded: onRecommendationsLoaded
         )
         _ = await (charactersTask, recommendationsTask)
     }
 
-    private func loadCharacters(animeId: Int, generation: UUID) async {
+    private func loadCharacters(
+        animeId: Int,
+        generation: UUID,
+        onLoaded: (([AnimeCharacterEntry]) -> Void)? = nil
+    ) async {
         guard generation == requestGeneration else { return }
         isLoadingCharacters = true
         charactersError = nil
@@ -76,6 +120,7 @@ final class DetailViewModel {
             let response = try await KitsuClient.shared.characters(animeId: animeId)
             guard generation == requestGeneration, !Task.isCancelled else { return }
             characters = Array(response.data.prefix(15))
+            onLoaded?(characters)
         } catch let apiError as APIError {
             guard generation == requestGeneration, !Task.isCancelled else { return }
             guard apiError != .cancelled else { return }
@@ -88,7 +133,11 @@ final class DetailViewModel {
         }
     }
 
-    private func loadRecommendations(animeId: Int, generation: UUID) async {
+    private func loadRecommendations(
+        animeId: Int,
+        generation: UUID,
+        onLoaded: (([RecommendationEntry]) -> Void)? = nil
+    ) async {
         guard generation == requestGeneration else { return }
         isLoadingRecommendations = true
         recommendationsError = nil
@@ -102,6 +151,7 @@ final class DetailViewModel {
             let response = try await KitsuClient.shared.recommendations(animeId: animeId)
             guard generation == requestGeneration, !Task.isCancelled else { return }
             recommendations = Array(response.data.prefix(10))
+            onLoaded?(recommendations)
         } catch let apiError as APIError {
             guard generation == requestGeneration, !Task.isCancelled else { return }
             guard apiError != .cancelled else { return }

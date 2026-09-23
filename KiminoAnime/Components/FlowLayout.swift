@@ -1,12 +1,3 @@
-//
-//  FlowLayout.swift
-//  KiminoAnime
-//
-//  T4.8 — a stack that wraps to the next line when it runs out of
-//  width. Used for the genre chip row on Detail and the genre filter
-//  row on Search.
-//
-
 import SwiftUI
 
 struct FlowLayout: Layout {

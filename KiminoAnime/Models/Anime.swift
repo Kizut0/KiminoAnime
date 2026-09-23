@@ -1,16 +1,5 @@
 import Foundation
 
-//  NOTE (Anuson, 9/22): marked `id` (Anime, MalRef) and `displayTitle`
-//  (Anime) `nonisolated`, and added a `nonisolated` convenience initializer
-//  `Anime.init(malId:title:images:)` in an extension below. Same root cause
-//  as the KitsuResource.swift fix: SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor
-//  makes every un-annotated computed property/initializer implicitly
-//  @MainActor-isolated, and KitsuClient (its own actor) reads/constructs
-//  these synchronously in map/filter/compactMap closures (see
-//  KitsuClient.swift lines ~58, 111, 159-160 -- recommendations(animeId:)
-//  in particular needed both the new initializer and `nonisolated` on it
-//  and on `displayTitle` before it would compile). Aung -- please review.
-
 struct Anime: Codable, Identifiable, Hashable {
  
     // MARK: Identity

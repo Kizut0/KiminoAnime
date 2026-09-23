@@ -1,11 +1,3 @@
-//
-//  GenreChip.swift
-//  KiminoAnime
-//
-//  T4.8 — filter/display chip for genre names. Selectable variant
-//  is used on Search; plain (non-interactive) variant on Detail.
-//
-
 import SwiftUI
 
 struct GenreChip: View {

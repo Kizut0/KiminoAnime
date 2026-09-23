@@ -144,11 +144,14 @@ struct DiscoverView: View {
                 if vm.isRefreshing {
                     ProgressView("Updating anime…")
                         .font(Theme.Text.meta)
-                } else if vm.refreshError != nil {
-                    Text("Some anime couldn’t update. Pull to refresh.")
-                        .font(Theme.Text.meta)
-                        .foregroundStyle(Theme.Colors.secondary)
-                        .padding(.horizontal, Theme.Space.screen)
+                } else if let error = vm.refreshError {
+                    InlineRetryRow(
+                        title: "Couldn't update Discover",
+                        error: error,
+                        isLoading: vm.isRefreshing
+                    ) {
+                        await vm.refresh(safeOnly: safeSearch)
+                    }
                 }
 
                 // T6.4

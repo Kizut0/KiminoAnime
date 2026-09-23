@@ -1,31 +1,12 @@
 import Foundation
+import CryptoKit
 
-//  NOTE (Anuson, 9/22): marked DiskCache `nonisolated`. Root cause: the
-//  project turns on Swift 6's "approachable concurrency" default isolation
-//  (SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor in project.pbxproj), which
-//  made DiskCache's un-annotated static save/load implicitly
-//  @MainActor-isolated. DiscoverViewModel.swift's init uses them as
-//  *default parameter values* (readCache/saveCache), and Swift evaluates a
-//  function's default-argument expressions in a nonisolated context even
-//  when the function itself is @MainActor -- so that was a cross-actor
-//  synchronous call and a hard Swift 6 error (DiscoverViewModel.swift:38-39).
-//  This didn't need any change to the actual caching logic, just the
-//  isolation annotation. I checked Preferences.swift's RecentSearches too --
-//  its call sites are all through @MainActor-isolated stored-property
-//  defaults (fine as-is), not function-parameter defaults, so it isn't
-//  hitting this bug right now and I left it alone.
-//  Hsu -- please review; flagging since your commit said "debugging
-//  required" and I don't want to step on whatever else you're still
-//  checking here.
-//
-/// JSON snapshots of API responses, so Discover renders offline.
-/// Lives in Caches/ — iOS may reclaim it under storage pressure,
-/// which is correct for data we can always refetch.
+
 nonisolated enum DiskCache {
  
     private static var directory: URL {
         let base = FileManager.default.urls(
-            for: .cachesDirectory, in: .userDomainMask)[0]
+            for: .applicationSupportDirectory, in: .userDomainMask)[0]
         let dir = base.appending(path: "KiminoAnimeCache")
         if !FileManager.default.fileExists(atPath: dir.path()) {
             try? FileManager.default.createDirectory(
@@ -33,21 +14,50 @@ nonisolated enum DiskCache {
         }
         return dir
     }
+
+    private static var legacyDirectory: URL {
+        FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+            .appending(path: "KiminoAnimeCache")
+    }
+
+    static func key(for value: String) -> String {
+        SHA256.hash(data: Data(value.utf8))
+            .map { String(format: "%02x", $0) }
+            .joined()
+    }
  
     static func save<T: Encodable>(_ value: T, as name: String) {
-        guard let data = try? JSONEncoder().encode(value) else { return }
-        try? data.write(to: directory.appending(path: name + ".json"),
-                        options: .atomic)
+        do {
+            let data = try JSONEncoder().encode(value)
+            try data.write(to: directory.appending(path: name + ".json"),
+                           options: .atomic)
+        } catch {
+            NotificationCenter.default.post(
+                name: Notification.Name("offlineCacheSaveFailed"),
+                object: "Offline browsing data couldn't be saved. Check available device storage."
+            )
+        }
     }
  
     static func load<T: Decodable>(_ name: String, as type: T.Type) -> T? {
         let url = directory.appending(path: name + ".json")
-        guard let data = try? Data(contentsOf: url) else { return nil }
-        return try? JSONDecoder().decode(T.self, from: data)
+        if let data = try? Data(contentsOf: url),
+           let value = try? JSONDecoder().decode(T.self, from: data) {
+            return value
+        }
+        // Preserve Discover/genre data written by earlier app versions.
+        let oldURL = legacyDirectory.appending(path: name + ".json")
+        guard let data = try? Data(contentsOf: oldURL),
+              let value = try? JSONDecoder().decode(T.self, from: data)
+        else { return nil }
+        try? data.write(to: url, options: .atomic)
+        return value
     }
  
     static func age(of name: String) -> TimeInterval? {
-        let url = directory.appending(path: name + ".json")
+        let current = directory.appending(path: name + ".json")
+        let url = FileManager.default.fileExists(atPath: current.path())
+            ? current : legacyDirectory.appending(path: name + ".json")
         guard let attrs = try? FileManager.default
                 .attributesOfItem(atPath: url.path()),
               let modified = attrs[.modificationDate] as? Date
@@ -72,10 +82,33 @@ nonisolated enum DiskCache {
     }
  
     static func clear() {
-        guard let files = try? FileManager.default
-                .contentsOfDirectory(at: directory,
-                                     includingPropertiesForKeys: nil)
-        else { return }
-        files.forEach { try? FileManager.default.removeItem(at: $0) }
+        for folder in [directory, legacyDirectory] {
+            guard let files = try? FileManager.default
+                    .contentsOfDirectory(at: folder,
+                                         includingPropertiesForKeys: nil)
+            else { continue }
+            files.forEach { try? FileManager.default.removeItem(at: $0) }
+        }
     }
+}
+
+struct CachedAnimePage: Codable {
+    let items: [Anime]
+    let page: Int
+    let hasNextPage: Bool
+}
+
+nonisolated enum OfflineCacheKey {
+    static func search(_ query: String, genres: [Int], safeOnly: Bool) -> String {
+        let identity = "search|\(safeOnly)|\(query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased())|\(genres.sorted())"
+        return "search-v1-" + DiskCache.key(for: identity)
+    }
+
+    static func genre(_ id: Int, safeOnly: Bool) -> String {
+        "genre-v1-\(id)-\(safeOnly)"
+    }
+
+    static func detail(_ id: Int) -> String { "detail-v1-\(id)" }
+    static func characters(_ id: Int) -> String { "characters-v1-\(id)" }
+    static func recommendations(_ id: Int) -> String { "recommendations-v1-\(id)" }
 }

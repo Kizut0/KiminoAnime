@@ -1,11 +1,3 @@
-//
-//  MyListView.swift
-//  KiminoAnime
-//
-//  Placeholder created in T5.1 so the tab bar compiles.
-//  Real implementation is Part 9 (Screen 4 — My List), owned by Hsu.
-//
-
 import SwiftUI
 import SwiftData
 
@@ -35,6 +27,26 @@ struct MyListView: View {
                 .navigationDestination(for: Anime.self) { DetailView(anime: $0) }
                 .toolbar { sortMenu }
         }
+        .task { await refreshMissingDetails() }
+    }
+
+    private func refreshMissingDetails() async {
+        let store = LibraryStore(context: context)
+        for saved in allSaved where saved.detailData == nil {
+            guard !Task.isCancelled else { return }
+            do {
+                let result = try await KitsuClient.shared.animeDetail(id: saved.malId)
+                guard !Task.isCancelled else { return }
+                store.cacheDetail(result.data)
+            } catch APIError.offline {
+                return
+            } catch is CancellationError {
+                return
+            } catch {
+                // Another saved title may still refresh successfully.
+                continue
+            }
+        }
     }
 }
 
@@ -48,7 +60,13 @@ private extension MyListView {
             } else {
                 List {
                     ForEach(visible) { item in
-                        NavigationLink(value: item.malId) { SavedRow(item: item, context: context) }
+                        NavigationLink {
+                            // Open from the SwiftData snapshot so this route
+                            // does not depend on the network or an ID lookup.
+                            DetailView(anime: item.offlineAnime)
+                        } label: {
+                            SavedRow(item: item, context: context)
+                        }
                             .listRowBackground(Theme.Colors.background)
                             .swipeActions(edge: .trailing) {
                                 Button(role: .destructive) { withAnimation(Motion.snappy) { LibraryStore(context: context).remove(item) } } label: { Label("Remove", systemImage: "trash") }
@@ -96,7 +114,12 @@ struct SavedRow: View {
     private var store: LibraryStore { LibraryStore(context: context) }
     var body: some View {
         HStack(spacing: Theme.Space.md) {
-            CachedAsyncImage(url: item.posterURL).frame(width: 58, height: 87)
+            CachedAsyncImage(
+                url: item.posterURL,
+                cachedData: item.posterData,
+                onImageLoaded: { store.cachePoster($0, for: item.malId, url: item.posterURL) }
+            )
+            .frame(width: 58, height: 87)
             VStack(alignment: .leading, spacing: Theme.Space.xs) {
                 HStack(spacing: Theme.Space.xs) {
                     Text(item.title).font(Theme.Text.cardTitle).foregroundStyle(Theme.Colors.primary).lineLimit(2)

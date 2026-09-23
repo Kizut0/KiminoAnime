@@ -15,6 +15,12 @@ actor KitsuClient {
     }
 
     func request<T: Decodable>(_ path: String, query: [URLQueryItem] = [], maxAttempts: Int = 3, timeout: TimeInterval = 20, as: T.Type) async throws -> T {
+        #if DEBUG
+        // Deterministic simulator check without changing the device or host network.
+        if ProcessInfo.processInfo.arguments.contains("-KiminoAnimeForceOffline") {
+            throw APIError.offline
+        }
+        #endif
         guard var components = URLComponents(string: "https://kitsu.app/api/edge/" + path) else { throw APIError.badURL }
         if !query.isEmpty { components.queryItems = query }
         guard let url = components.url else { throw APIError.badURL }
@@ -44,7 +50,8 @@ actor KitsuClient {
                 switch error.code {
                 case .cancelled: throw APIError.cancelled
                 case .timedOut: if attempt + 1 == maxAttempts { throw APIError.server(408) }
-                case .notConnectedToInternet, .networkConnectionLost, .dataNotAllowed, .cannotFindHost: throw APIError.offline
+                case .notConnectedToInternet, .networkConnectionLost, .dataNotAllowed,
+                     .cannotFindHost, .cannotConnectToHost, .dnsLookupFailed: throw APIError.offline
                 default: throw APIError.badResponse
                 }
             } catch is CancellationError { throw APIError.cancelled }

@@ -1,12 +1,3 @@
-//
-//  PosterCard.swift
-//  KiminoAnime
-//
-//  T4.6 — used by Discover, Search results and the Detail
-//  recommendations row. Grid cards use the width proposed by their
-//  container; carousel cards can still provide an explicit width.
-//
-
 import SwiftUI
 
 struct PosterCard: View {

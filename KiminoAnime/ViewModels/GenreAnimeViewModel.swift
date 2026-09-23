@@ -1,20 +1,3 @@
-//
-//  GenreAnimeViewModel.swift
-//  KiminoAnime
-//
-//  NOTE (Anuson, 9/22): new file -- GenreAnimeView.swift was completely
-//  empty (just the Xcode header, no `struct` at all), and DetailView.swift's
-//  genre chips push into it, so the build couldn't compile without it.
-//  This is Aung's Detail-screen territory (genre -> filtered results), so
-//  I modeled it closely on his own SearchViewModel.swift: same state enum
-//  shape, same pagination pattern, same use of
-//  KitsuClient.search(query:page:genreIds:safeOnly:) with an empty query
-//  string and one genre ID (that's the exact "browse by genre with no
-//  text" path SearchView already exercises when you tap a genre chip with
-//  an empty search field, so it's a proven call, not a new one).
-//  Aung -- please review and fold this into your part if you'd rather it
-//  look different.
-//
 
 import SwiftUI
 
@@ -30,37 +13,62 @@ final class GenreAnimeViewModel {
     private(set) var state: LoadState = .loading
     private(set) var isLoadingMore = false
     private(set) var paginationError: APIError?
+    private(set) var refreshError: APIError?
+    private(set) var isRefreshing = false
 
     private var page = 1
     private var canLoadMore = true
     private var requestGeneration = UUID()
+    private var activeGenreId: Int?
+    private var activeSafeOnly: Bool?
 
     func load(genreId: Int, safeOnly: Bool) async {
         let generation = UUID()
         requestGeneration = generation
+        activeGenreId = genreId
+        activeSafeOnly = safeOnly
         page = 1
-        canLoadMore = true
+        canLoadMore = false
         isLoadingMore = false
         paginationError = nil
-        state = .loading
+        refreshError = nil
+        let cacheKey = OfflineCacheKey.genre(genreId, safeOnly: safeOnly)
+        let cached = DiskCache.load(cacheKey, as: CachedAnimePage.self)
+        if let cached {
+            page = cached.page
+            canLoadMore = cached.hasNextPage
+            state = cached.items.isEmpty ? .empty : .results(cached.items)
+        } else {
+            state = .loading
+        }
+        isRefreshing = true
+        defer {
+            if generation == requestGeneration { isRefreshing = false }
+        }
         do {
             let response = try await KitsuClient.shared.search(
                 query: "", page: 1, genreIds: [genreId], safeOnly: safeOnly
             )
             guard generation == requestGeneration, !Task.isCancelled else { return }
+            page = 1
             canLoadMore = response.pagination?.hasNextPage ?? false
+            DiskCache.save(CachedAnimePage(items: response.data, page: 1, hasNextPage: canLoadMore), as: cacheKey)
             state = response.data.isEmpty ? .empty : .results(response.data)
         } catch let error as APIError {
             guard generation == requestGeneration, !Task.isCancelled else { return }
-            if error != .cancelled { state = .failed(error) }
+            guard error != .cancelled else { return }
+            if cached != nil { refreshError = error }
+            else { state = .failed(error) }
         } catch {
             guard generation == requestGeneration, !Task.isCancelled else { return }
-            state = .failed(.badResponse)
+            if cached != nil { refreshError = .badResponse }
+            else { state = .failed(.badResponse) }
         }
     }
 
     func loadMoreIfNeeded(current item: Anime, genreId: Int, safeOnly: Bool) async {
-        guard canLoadMore, !isLoadingMore,
+        guard canLoadMore, !isLoadingMore, !isRefreshing,
+              activeGenreId == genreId, activeSafeOnly == safeOnly,
               case .results(let current) = state,
               current.last?.malId == item.malId else { return }
         let generation = requestGeneration
@@ -80,7 +88,12 @@ final class GenreAnimeViewModel {
             canLoadMore = response.pagination?.hasNextPage ?? false
             paginationError = nil
             let existing = Set(current.map(\.malId))
-            state = .results(current + response.data.filter { !existing.contains($0.malId) })
+            let items = current + response.data.filter { !existing.contains($0.malId) }
+            state = .results(items)
+            DiskCache.save(
+                CachedAnimePage(items: items, page: page, hasNextPage: canLoadMore),
+                as: OfflineCacheKey.genre(genreId, safeOnly: safeOnly)
+            )
         } catch let error as APIError {
             guard generation == requestGeneration, !Task.isCancelled else { return }
             guard error != .cancelled else { return }

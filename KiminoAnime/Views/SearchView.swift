@@ -15,9 +15,16 @@ struct SearchView: View {
                     case .initial: initialState
                     case .searching: LoadingStateView(message: "Searching…")
                     case .empty(let term):
-                        EmptyStateView(title: "No results", message: "Nothing matched “\(term)”. Try a shorter or differently spelled title.", symbol: "magnifyingglass")
+                        VStack(spacing: 0) {
+                            refreshStatus
+                            EmptyStateView(title: "No results", message: "Nothing matched “\(term)”. Try a shorter or differently spelled title.", symbol: "magnifyingglass")
+                        }
                     case .failed(let error): ErrorStateView(error: error) { await vm.search(query, safeOnly: safeSearch) }
-                    case .results(let items): resultsList(items)
+                    case .results(let items):
+                        VStack(spacing: 0) {
+                            refreshStatus
+                            resultsList(items)
+                        }
                     }
                 }
                 .animation(Motion.quick, value: vm.state)
@@ -55,11 +62,33 @@ struct SearchView: View {
 }
 
 private extension SearchView {
+    @ViewBuilder
+    var refreshStatus: some View {
+        if let error = vm.refreshError {
+            InlineRetryRow(title: "Couldn't update search results", error: error, isLoading: vm.isRefreshing) {
+                await vm.search(query, safeOnly: safeSearch)
+            }
+            .padding(.vertical, Theme.Space.sm)
+        } else if vm.isRefreshing {
+            ProgressView("Updating saved results…")
+                .font(Theme.Text.meta)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, Theme.Space.sm)
+        }
+    }
+
     var genreBar: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: Theme.Space.sm) {
                 ForEach(vm.genres) { genre in
                     GenreChip(title: genre.name, isSelected: vm.selectedGenreIds.contains(genre.malId)) { toggle(genre) }
+                }
+                if vm.genres.isEmpty, vm.genresError != nil {
+                    Label("Genres unavailable offline", systemImage: "wifi.slash")
+                        .font(Theme.Text.meta)
+                        .foregroundStyle(Theme.Colors.secondary)
+                    Button("Try again") { Task { await vm.loadGenresIfNeeded() } }
+                        .font(Theme.Text.meta)
                 }
             }
             .padding(.horizontal, Theme.Space.screen)

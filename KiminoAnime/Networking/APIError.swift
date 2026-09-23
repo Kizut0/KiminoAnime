@@ -31,7 +31,7 @@ enum APIError: LocalizedError, Equatable {
         case .decoding:
             "We couldn't read the data we got back."
         case .offline:
-            "You're offline. Showing what we've saved."
+            "You're offline. Connect to the internet to load this content."
         case .cancelled:
             "Request cancelled."
         }

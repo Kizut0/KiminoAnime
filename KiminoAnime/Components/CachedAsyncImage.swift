@@ -1,21 +1,10 @@
-//
-//  CachedAsyncImage.swift
-//  KiminoAnime
-//
-//  T4.5 — loads a poster/portrait through ImageCache (Storage layer,
-//  T3.x) so scrolling never re-fetches the same image twice. Falls
-//  back to a shimmer while loading and a photo glyph on failure.
-//
-//  NOTE: this depends on `ImageCache.shared` from Storage/ImageCache.swift
-//  (Part 3, persistence layer). It will not compile until that file has
-//  an actual implementation — that's a teammate's task, not a bug here.
-//
-
 import SwiftUI
 
 struct CachedAsyncImage: View {
     let url: URL?
     var cornerRadius: CGFloat = Theme.Radius.poster
+    var cachedData: Data? = nil
+    var onImageLoaded: ((Data) -> Void)? = nil
 
     @State private var image: UIImage?
     @State private var didFail = false
@@ -48,11 +37,25 @@ struct CachedAsyncImage: View {
     private func load() async {
         image = nil
         didFail = false
+        if let cachedData, let decoded = UIImage(data: cachedData) {
+            image = decoded
+            return
+        }
         guard let url else { didFail = true; return }
         if let cached = await ImageCache.shared.image(for: url) {
             image = cached
+            if let onImageLoaded,
+               let data = cached.jpegData(compressionQuality: 0.85) {
+                onImageLoaded(data)
+            }
             return
         }
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("-KiminoAnimeForceOffline") {
+            didFail = true
+            return
+        }
+        #endif
         do {
             // Plain URLSession — poster images come from the CDN and
             // must NOT go through the API client's own throttle, or
@@ -63,8 +66,9 @@ struct CachedAsyncImage: View {
                 didFail = true
                 return
             }
-            await ImageCache.shared.insert(decoded, for: url)
+            await ImageCache.shared.insert(decoded, for: url, data: data)
             image = decoded
+            onImageLoaded?(data)
         } catch {
             if !Task.isCancelled { didFail = true }
         }
