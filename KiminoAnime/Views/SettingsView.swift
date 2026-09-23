@@ -13,8 +13,7 @@ struct SettingsView: View {
     @Environment(\.modelContext) private var context
     @Query private var saved: [SavedAnime]
     @AppStorage(PrefKey.safeSearch) private var safeSearch = true
-    @AppStorage(PrefKey.reduceMotion) private var reduceMotion = false
-    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @AppStorage(PrefKey.appearance) private var appearance = AppAppearance.system
     @State private var cacheSize = DiskCache.formattedSize
     @State private var showClearListConfirm = false
 
@@ -33,9 +32,18 @@ private extension SettingsView {
         footer: { Text("Filters adult titles out of Discover and Search. Applied to every API request.") }
     }
     var appearanceSection: some View {
-        Section { Toggle(isOn: $reduceMotion) { Label("Reduce motion", systemImage: "figure.walk.motion") } }
+        Section {
+            Picker(selection: $appearance) {
+                ForEach(AppAppearance.allCases) { option in
+                    Text(option.rawValue).tag(option)
+                }
+            } label: {
+                Label("Theme", systemImage: "circle.lefthalf.filled")
+            }
+            .pickerStyle(.menu)
+        }
         header: { Text("Appearance") }
-        footer: { Text(systemReduceMotion ? "Motion is also reduced by the system accessibility setting." : "Disables the score ring animation, the staggered grid entrance, and the parallax headers.") }
+        footer: { Text("Choose Light or Dark, or use System to match your device.") }
     }
     var storageSection: some View {
         Section("Storage") {

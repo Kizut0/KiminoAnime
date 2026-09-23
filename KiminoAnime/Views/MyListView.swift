@@ -32,6 +32,7 @@ struct MyListView: View {
                 .background(Theme.Colors.background)
                 .navigationTitle("My List")
                 .navigationDestination(for: Int.self) { DetailView(animeId: $0) }
+                .navigationDestination(for: Anime.self) { DetailView(anime: $0) }
                 .toolbar { sortMenu }
         }
     }

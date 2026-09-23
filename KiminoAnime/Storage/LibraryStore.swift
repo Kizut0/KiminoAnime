@@ -83,7 +83,12 @@ struct LibraryStore {
         _ count: Int,
         on anime: SavedAnime
     ) {
-        anime.episodesWatched = max(0, count)
+        let nonNegativeCount = max(0, count)
+        anime.episodesWatched = if let total = anime.totalEpisodes {
+            min(nonNegativeCount, max(0, total))
+        } else {
+            nonNegativeCount
+        }
 
         if let total = anime.totalEpisodes,
            anime.episodesWatched >= total {

@@ -9,7 +9,6 @@ struct DetailView: View {
     @State private var showStatusPicker = false
     @Environment(\.modelContext) private var context
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
-    @AppStorage(PrefKey.reduceMotion) private var reduceMotion = false
 
     init(anime: Anime) { seed = anime; animeId = anime.malId }
     init(animeId: Int) { seed = nil; self.animeId = animeId }
@@ -52,7 +51,7 @@ struct DetailView: View {
     private func header(_ anime: Anime) -> some View {
         GeometryReader { geo in
             let minY = geo.frame(in: .named("detailScroll")).minY
-            let stretch = (reduceMotion || systemReduceMotion) ? 0 : max(0, minY)
+            let stretch = systemReduceMotion ? 0 : max(0, minY)
             CachedAsyncImage(url: anime.posterURL, cornerRadius: 0)
                 .frame(width: geo.size.width, height: 460 + stretch)
                 .clipped()
@@ -78,7 +77,7 @@ private extension DetailView {
 
     func statsRow(_ anime: Anime) -> some View {
         HStack(spacing: Theme.Space.xl) {
-            if let score = anime.score, score > 0 { ScoreRing(score: score, reduceMotion: reduceMotion || systemReduceMotion) }
+            if let score = anime.score, score > 0 { ScoreRing(score: score, reduceMotion: systemReduceMotion) }
             VStack(alignment: .leading, spacing: Theme.Space.sm) {
                 if let rank = anime.rank { StatLine(symbol: "trophy.fill", label: "Ranked", value: "#\(rank)") }
                 if let popularity = anime.popularity { StatLine(symbol: "flame.fill", label: "Popularity", value: "#\(popularity)") }

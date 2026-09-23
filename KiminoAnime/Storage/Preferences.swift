@@ -3,13 +3,29 @@ import SwiftUI
 /// Keys in one place so a typo can't silently create a second setting.
 enum PrefKey {
     static let safeSearch   = "pref.safeSearch"
-    static let reduceMotion = "pref.reduceMotion"
+    static let appearance   = "pref.appearance"
     static let gridColumns  = "pref.gridColumns"
     static let listSort     = "pref.listSort"
     static let lastTab      = "pref.lastTab"
     static let recentSearches = "pref.recentSearches"
 }
  
+enum AppAppearance: String, CaseIterable, Identifiable {
+    case system = "System"
+    case light = "Light"
+    case dark = "Dark"
+
+    var id: String { rawValue }
+
+    var colorScheme: ColorScheme? {
+        switch self {
+        case .system: nil
+        case .light: .light
+        case .dark: .dark
+        }
+    }
+}
+
 enum ListSort: String, CaseIterable, Identifiable {
     case dateAdded = "Date added"
     case title     = "Title"

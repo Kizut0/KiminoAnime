@@ -12,8 +12,8 @@ struct DiscoverView: View {
     @AppStorage(PrefKey.safeSearch)
     private var safeSearch = true
 
-    @AppStorage(PrefKey.reduceMotion)
-    private var reduceMotion = false
+    @Environment(\.accessibilityReduceMotion)
+    private var reduceMotion
 
     // MARK: - Navigation Transition
 
@@ -93,7 +93,18 @@ struct DiscoverView: View {
 
     // MARK: - Main Content
 
+    @ViewBuilder
     private var content: some View {
+        if #available(iOS 26.0, *) {
+            // Scroll-edge blur is separate from the navigation bar background.
+            scrollContent
+                .scrollEdgeEffectHidden(vm.hero != nil, for: .top)
+        } else {
+            scrollContent
+        }
+    }
+
+    private var scrollContent: some View {
 
         ScrollView {
 
@@ -180,7 +191,7 @@ private extension DiscoverView {
 
                     // Positive minY occurs when
                     // pulling down beyond the top.
-                    let stretch =
+                    let stretch = reduceMotion ? 0 :
                         max(
                             0,
                             minY

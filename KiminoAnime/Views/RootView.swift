@@ -6,7 +6,7 @@
 //  the app reopens on whichever tab you left — a persistence detail
 //  worth mentioning in the demo for one line of code.
 //
-//  NOTE: PrefKey.lastTab (and PrefKey.safeSearch / .reduceMotion used
+//  NOTE: PrefKey.lastTab (and PrefKey.safeSearch used
 //  elsewhere) live in Storage/Preferences.swift, which is Part 3
 //  (persistence layer) and is not implemented yet. This file will not
 //  compile until that lands — that's a teammate's task, not a bug here.
@@ -16,6 +16,7 @@ import SwiftUI
 
 struct RootView: View {
     @AppStorage(PrefKey.lastTab) private var selection = 0
+    @AppStorage(PrefKey.appearance) private var appearance = AppAppearance.system
 
     var body: some View {
         TabView(selection: $selection) {
@@ -33,5 +34,6 @@ struct RootView: View {
                 .tag(3)
         }
         .tint(Theme.Colors.accent)
+        .preferredColorScheme(appearance.colorScheme)
     }
 }

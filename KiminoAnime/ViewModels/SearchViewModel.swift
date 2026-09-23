@@ -19,6 +19,7 @@ final class SearchViewModel {
     private var page = 1
     private var canLoadMore = true
     private var lastQuery = ""
+    private var requestGeneration = UUID()
 
     func loadGenresIfNeeded() async {
         guard genres.isEmpty else { return }
@@ -33,6 +34,8 @@ final class SearchViewModel {
     }
 
     func search(_ query: String, safeOnly: Bool) async {
+        let generation = UUID()
+        requestGeneration = generation
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty || !selectedGenreIds.isEmpty else {
             state = .initial
@@ -47,6 +50,7 @@ final class SearchViewModel {
                 query: trimmed, page: 1,
                 genreIds: Array(selectedGenreIds), safeOnly: safeOnly
             )
+            guard generation == requestGeneration, !Task.isCancelled else { return }
             canLoadMore = response.pagination?.hasNextPage ?? false
             if response.data.isEmpty {
                 state = .empty(trimmed)
@@ -58,8 +62,10 @@ final class SearchViewModel {
                 }
             }
         } catch let error as APIError {
+            guard generation == requestGeneration, !Task.isCancelled else { return }
             if error != .cancelled { state = .failed(error) }
         } catch {
+            guard generation == requestGeneration, !Task.isCancelled else { return }
             state = .failed(.badResponse)
         }
     }
@@ -68,15 +74,18 @@ final class SearchViewModel {
         guard canLoadMore, !isLoadingMore,
               case .results(let current) = state,
               current.last?.malId == item.malId else { return }
+        let generation = requestGeneration
         isLoadingMore = true
         defer { isLoadingMore = false }
         guard let response = try? await KitsuClient.shared.search(
             query: lastQuery, page: page + 1,
             genreIds: Array(selectedGenreIds), safeOnly: safeOnly
         ) else {
+            guard generation == requestGeneration else { return }
             canLoadMore = false
             return
         }
+        guard generation == requestGeneration, !Task.isCancelled else { return }
         page += 1
         canLoadMore = response.pagination?.hasNextPage ?? false
         let existing = Set(current.map(\.malId))
@@ -84,6 +93,7 @@ final class SearchViewModel {
     }
 
     func clear() {
+        requestGeneration = UUID()
         state = .initial
         selectedGenreIds = []
         page = 1

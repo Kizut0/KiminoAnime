@@ -15,7 +15,7 @@ enum Motion {
     static let quick  = Animation.easeOut(duration: 0.2)
     static let reveal = Animation.easeOut(duration: 0.9)
 
-    /// Honours the user's system setting and our own Settings toggle.
+    /// Honours the user's system Reduce Motion setting.
     static func respectful(_ animation: Animation, reduced: Bool) -> Animation? {
         reduced ? nil : animation
     }

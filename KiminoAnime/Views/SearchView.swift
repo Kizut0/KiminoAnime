@@ -37,7 +37,11 @@ struct SearchView: View {
         .task { await vm.loadGenresIfNeeded() }
         .task(id: query) {
             guard !query.isEmpty else {
-                if vm.selectedGenreIds.isEmpty { vm.clear() }
+                if vm.selectedGenreIds.isEmpty {
+                    vm.clear()
+                } else {
+                    await vm.search(query, safeOnly: safeSearch)
+                }
                 return
             }
             try? await Task.sleep(for: .milliseconds(400))
