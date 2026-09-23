@@ -16,6 +16,7 @@ final class DiscoverViewModel {
     private(set) var isRefreshing = false
     private(set) var refreshError: APIError?
     private(set) var isLoadingMore = false
+    private(set) var paginationError: APIError?
 
     private var page = 1
     private var canLoadMore = false
@@ -55,6 +56,8 @@ final class DiscoverViewModel {
         activeFilter = safeOnly
         isRefreshing = true
         refreshError = nil
+        paginationError = nil
+        isLoadingMore = false
         canLoadMore = false
 
         // Render saved results before starting any network work. Keep current
@@ -135,9 +138,12 @@ final class DiscoverViewModel {
 
         let token = generation
         isLoadingMore = true
+        paginationError = nil
 
         defer {
-            isLoadingMore = false
+            if generation == token {
+                isLoadingMore = false
+            }
         }
 
         do {
@@ -156,6 +162,7 @@ final class DiscoverViewModel {
                 .pagination?
                 .hasNextPage
                 ?? false
+            paginationError = nil
 
             // Prevent duplicate ForEach IDs if Kitsu
             // repeats an anime across page boundaries.
@@ -179,35 +186,23 @@ final class DiscoverViewModel {
             saveCache(top, "kitsu-\(safeOnly)-" + topCacheKey)
 
         } catch let error as APIError {
-            guard generation == token else { return }
+            guard generation == token, !Task.isCancelled else { return }
 
             guard error != .cancelled else {
                 return
             }
 
-            // Fail pagination quietly.
-            // Existing screen remains usable.
-            canLoadMore = false
-
-            #if DEBUG
-            print(
-                "Discover pagination failed:",
-                error.localizedDescription
-            )
-            #endif
+            paginationError = error
 
         } catch {
-            guard generation == token else { return }
-
-            canLoadMore = false
-
-            #if DEBUG
-            print(
-                "Discover pagination failed:",
-                error.localizedDescription
-            )
-            #endif
+            guard generation == token, !Task.isCancelled else { return }
+            paginationError = .badResponse
         }
+    }
+
+    func retryLoadMore(safeOnly: Bool) async {
+        guard let last = top.last else { return }
+        await loadMoreIfNeeded(current: last, safeOnly: safeOnly)
     }
 
     func refresh(safeOnly: Bool) async {

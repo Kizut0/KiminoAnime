@@ -17,6 +17,7 @@ import SwiftUI
 struct RootView: View {
     @AppStorage(PrefKey.lastTab) private var selection = 0
     @AppStorage(PrefKey.appearance) private var appearance = AppAppearance.system
+    @State private var storageErrorMessage: String?
 
     var body: some View {
         TabView(selection: $selection) {
@@ -35,5 +36,20 @@ struct RootView: View {
         }
         .tint(Theme.Colors.accent)
         .preferredColorScheme(appearance.colorScheme)
+        .onReceive(NotificationCenter.default.publisher(for: .libraryStoreSaveFailed)) { notification in
+            storageErrorMessage = notification.object as? String
+                ?? "Your changes could not be saved. Please try again."
+        }
+        .alert(
+            "Couldn't save changes",
+            isPresented: Binding(
+                get: { storageErrorMessage != nil },
+                set: { if !$0 { storageErrorMessage = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(storageErrorMessage ?? "Your changes could not be saved. Please try again.")
+        }
     }
 }

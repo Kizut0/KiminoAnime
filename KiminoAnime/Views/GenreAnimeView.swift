@@ -53,7 +53,9 @@ struct GenreAnimeView: View {
         .background(Theme.Colors.background)
         .navigationTitle(genre.name)
         .navigationBarTitleDisplayMode(.inline)
-        .task { await vm.load(genreId: genre.malId, safeOnly: safeSearch) }
+        .task(id: safeSearch) {
+            await vm.load(genreId: genre.malId, safeOnly: safeSearch)
+        }
     }
 
     private func resultsGrid(_ items: [Anime]) -> some View {
@@ -61,7 +63,7 @@ struct GenreAnimeView: View {
             LazyVGrid(columns: columns, spacing: Theme.Space.lg) {
                 ForEach(items) { anime in
                     NavigationLink(value: anime) {
-                        PosterCard(anime: anime, width: 165)
+                        PosterCard(anime: anime)
                     }
                     .buttonStyle(.plain)
                     .task { await vm.loadMoreIfNeeded(current: anime, genreId: genre.malId, safeOnly: safeSearch) }
@@ -73,6 +75,13 @@ struct GenreAnimeView: View {
                 ProgressView()
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, Theme.Space.lg)
+            } else if let error = vm.paginationError {
+                PaginationRetryRow(error: error, isLoading: vm.isLoadingMore) {
+                    await vm.retryLoadMore(
+                        genreId: genre.malId,
+                        safeOnly: safeSearch
+                    )
+                }
             }
         }
     }

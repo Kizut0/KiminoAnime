@@ -54,7 +54,7 @@ private extension MyListView {
                                 Button(role: .destructive) { withAnimation(Motion.snappy) { LibraryStore(context: context).remove(item) } } label: { Label("Remove", systemImage: "trash") }
                             }
                             .swipeActions(edge: .leading) {
-                                Button { item.isFavourite.toggle(); try? context.save() } label: { Label("Favourite", systemImage: item.isFavourite ? "heart.slash" : "heart") }.tint(.pink)
+                                Button { LibraryStore(context: context).setFavourite(!item.isFavourite, on: item) } label: { Label("Favourite", systemImage: item.isFavourite ? "heart.slash" : "heart") }.tint(.pink)
                             }
                     }
                 }.listStyle(.plain).animation(Motion.snappy, value: visible.count)

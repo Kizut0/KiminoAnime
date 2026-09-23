@@ -29,23 +29,32 @@ final class GenreAnimeViewModel {
 
     private(set) var state: LoadState = .loading
     private(set) var isLoadingMore = false
+    private(set) var paginationError: APIError?
 
     private var page = 1
     private var canLoadMore = true
+    private var requestGeneration = UUID()
 
     func load(genreId: Int, safeOnly: Bool) async {
+        let generation = UUID()
+        requestGeneration = generation
         page = 1
         canLoadMore = true
+        isLoadingMore = false
+        paginationError = nil
         state = .loading
         do {
             let response = try await KitsuClient.shared.search(
                 query: "", page: 1, genreIds: [genreId], safeOnly: safeOnly
             )
+            guard generation == requestGeneration, !Task.isCancelled else { return }
             canLoadMore = response.pagination?.hasNextPage ?? false
             state = response.data.isEmpty ? .empty : .results(response.data)
         } catch let error as APIError {
+            guard generation == requestGeneration, !Task.isCancelled else { return }
             if error != .cancelled { state = .failed(error) }
         } catch {
+            guard generation == requestGeneration, !Task.isCancelled else { return }
             state = .failed(.badResponse)
         }
     }
@@ -54,24 +63,43 @@ final class GenreAnimeViewModel {
         guard canLoadMore, !isLoadingMore,
               case .results(let current) = state,
               current.last?.malId == item.malId else { return }
+        let generation = requestGeneration
         isLoadingMore = true
-        defer { isLoadingMore = false }
+        paginationError = nil
+        defer {
+            if generation == requestGeneration {
+                isLoadingMore = false
+            }
+        }
         do {
             let response = try await KitsuClient.shared.search(
                 query: "", page: page + 1, genreIds: [genreId], safeOnly: safeOnly
             )
-            guard !Task.isCancelled else { return }
+            guard generation == requestGeneration, !Task.isCancelled else { return }
             page += 1
             canLoadMore = response.pagination?.hasNextPage ?? false
+            paginationError = nil
             let existing = Set(current.map(\.malId))
             state = .results(current + response.data.filter { !existing.contains($0.malId) })
         } catch let error as APIError {
-            guard !Task.isCancelled, error != .cancelled else { return }
-            canLoadMore = false
+            guard generation == requestGeneration, !Task.isCancelled else { return }
+            guard error != .cancelled else { return }
+            paginationError = error
         } catch is CancellationError {
             return
         } catch {
-            canLoadMore = false
+            guard generation == requestGeneration else { return }
+            paginationError = .badResponse
         }
+    }
+
+    func retryLoadMore(genreId: Int, safeOnly: Bool) async {
+        guard case .results(let current) = state,
+              let last = current.last else { return }
+        await loadMoreIfNeeded(
+            current: last,
+            genreId: genreId,
+            safeOnly: safeOnly
+        )
     }
 }

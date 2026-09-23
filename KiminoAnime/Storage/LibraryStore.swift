@@ -1,6 +1,10 @@
 import Foundation
 import SwiftData
 
+extension Notification.Name {
+    static let libraryStoreSaveFailed = Notification.Name("libraryStoreSaveFailed")
+}
+
 /// All writes to the watchlist go through here.
 /// Views own a ModelContext; this owns the logic.
 struct LibraryStore {
@@ -79,6 +83,23 @@ struct LibraryStore {
         }
     }
 
+    func setStatus(
+        _ status: WatchStatus,
+        on anime: SavedAnime
+    ) {
+        anime.status = status
+        save()
+    }
+
+    func setFavourite(
+        _ isFavourite: Bool,
+        on anime: SavedAnime
+    ) {
+        anime.isFavourite = isFavourite
+        anime.dateUpdated = .now
+        save()
+    }
+
     func setEpisodes(
         _ count: Int,
         on anime: SavedAnime
@@ -100,8 +121,12 @@ struct LibraryStore {
     }
 
     func removeAll() {
-        try? context.delete(model: SavedAnime.self)
-        save()
+        do {
+            try context.delete(model: SavedAnime.self)
+            save()
+        } catch {
+            reportSaveFailure(error)
+        }
     }
 
     // MARK: Save
@@ -112,9 +137,18 @@ struct LibraryStore {
         do {
             try context.save()
         } catch {
-            #if DEBUG
-            print("SwiftData save failed:", error)
-            #endif
+            reportSaveFailure(error)
         }
+    }
+
+    private func reportSaveFailure(_ error: Error) {
+        NotificationCenter.default.post(
+            name: .libraryStoreSaveFailed,
+            object: error.localizedDescription
+        )
+
+        #if DEBUG
+        print("SwiftData save failed:", error)
+        #endif
     }
 }

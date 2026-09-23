@@ -29,13 +29,23 @@ struct DetailView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 header(anime)
+                if let error = vm.error {
+                    InlineRetryRow(
+                        title: "Couldn't refresh details",
+                        error: error,
+                        isLoading: vm.isLoading
+                    ) {
+                        await vm.load(seed: anime, id: anime.malId)
+                    }
+                    .padding(.top, Theme.Space.md)
+                }
                 VStack(alignment: .leading, spacing: Theme.Space.xl) {
                     statsRow(anime)
                     actionButton(anime)
                     genresSection(anime)
                     synopsisSection(anime)
-                    charactersSection
-                    recommendationsSection
+                    charactersSection(animeId: anime.malId)
+                    recommendationsSection(animeId: anime.malId)
                 }
                 .padding(.top, Theme.Space.xl)
                 .padding(.bottom, Theme.Space.xxl)
@@ -104,7 +114,7 @@ private extension DetailView {
             }
             .sensoryFeedback(.success, trigger: saved != nil)
             if let saved {
-                Picker("Status", selection: Binding(get: { saved.status }, set: { saved.status = $0; try? context.save() })) {
+                Picker("Status", selection: Binding(get: { saved.status }, set: { store.setStatus($0, on: saved) })) {
                     ForEach(WatchStatus.allCases) { Text($0.rawValue).tag($0) }
                 }.pickerStyle(.segmented)
             }
@@ -148,10 +158,20 @@ private extension DetailView {
         }
     }
 
-    @ViewBuilder var charactersSection: some View {
+    @ViewBuilder
+    func charactersSection(animeId: Int) -> some View {
         if !vm.characters.isEmpty {
             VStack(alignment: .leading, spacing: Theme.Space.md) {
                 SectionHeader(title: "Characters")
+                if let error = vm.charactersError {
+                    InlineRetryRow(
+                        title: "Couldn't refresh characters",
+                        error: error,
+                        isLoading: vm.isLoadingCharacters
+                    ) {
+                        await vm.retryCharacters(animeId: animeId)
+                    }
+                }
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(alignment: .top, spacing: Theme.Space.md) {
                         ForEach(vm.characters) { entry in
@@ -164,13 +184,35 @@ private extension DetailView {
                     }.padding(.horizontal, Theme.Space.screen)
                 }
             }
+        } else if vm.isLoadingCharacters {
+            ProgressView("Loading characters…")
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, Theme.Space.screen)
+        } else if let error = vm.charactersError {
+            InlineRetryRow(
+                title: "Couldn't load characters",
+                error: error,
+                isLoading: vm.isLoadingCharacters
+            ) {
+                await vm.retryCharacters(animeId: animeId)
+            }
         }
     }
 
-    @ViewBuilder var recommendationsSection: some View {
+    @ViewBuilder
+    func recommendationsSection(animeId: Int) -> some View {
         if !vm.recommendations.isEmpty {
             VStack(alignment: .leading, spacing: Theme.Space.md) {
                 SectionHeader(title: "Related anime")
+                if let error = vm.recommendationsError {
+                    InlineRetryRow(
+                        title: "Couldn't refresh related anime",
+                        error: error,
+                        isLoading: vm.isLoadingRecommendations
+                    ) {
+                        await vm.retryRecommendations(animeId: animeId)
+                    }
+                }
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(spacing: Theme.Space.md) {
                         ForEach(vm.recommendations) { rec in
@@ -183,6 +225,18 @@ private extension DetailView {
                         }
                     }.padding(.horizontal, Theme.Space.screen)
                 }
+            }
+        } else if vm.isLoadingRecommendations {
+            ProgressView("Loading related anime…")
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, Theme.Space.screen)
+        } else if let error = vm.recommendationsError {
+            InlineRetryRow(
+                title: "Couldn't load related anime",
+                error: error,
+                isLoading: vm.isLoadingRecommendations
+            ) {
+                await vm.retryRecommendations(animeId: animeId)
             }
         }
     }

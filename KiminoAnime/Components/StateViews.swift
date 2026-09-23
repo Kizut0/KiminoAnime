@@ -63,6 +63,95 @@ struct EmptyStateView: View {
     }
 }
 
+struct PaginationRetryRow: View {
+    let error: APIError
+    let isLoading: Bool
+    let retry: () async -> Void
+
+    var body: some View {
+        HStack(spacing: Theme.Space.md) {
+            if isLoading {
+                ProgressView()
+                    .controlSize(.small)
+            } else {
+                Image(systemName: "arrow.clockwise.circle")
+                    .font(.title3)
+                    .foregroundStyle(Theme.Colors.accent)
+                    .accessibilityHidden(true)
+            }
+
+            VStack(alignment: .leading, spacing: Theme.Space.xs) {
+                Text("Couldn't load more")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Theme.Colors.primary)
+                Text(error.errorDescription ?? "Please try again.")
+                    .font(Theme.Text.meta)
+                    .foregroundStyle(Theme.Colors.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: Theme.Space.sm)
+
+            if !isLoading {
+                Button("Try again") {
+                    Task { await retry() }
+                }
+                .buttonStyle(.bordered)
+            }
+        }
+        .padding(.horizontal, Theme.Space.screen)
+        .padding(.vertical, Theme.Space.md)
+        .background(Theme.Colors.card, in: RoundedRectangle(cornerRadius: Theme.Radius.card))
+        .padding(.horizontal, Theme.Space.screen)
+        .accessibilityElement(children: .combine)
+    }
+}
+
+struct InlineRetryRow: View {
+    let title: String
+    let error: APIError
+    let isLoading: Bool
+    let retry: () async -> Void
+
+    var body: some View {
+        HStack(spacing: Theme.Space.md) {
+            if isLoading {
+                ProgressView()
+                    .controlSize(.small)
+            } else {
+                Image(systemName: "exclamationmark.triangle")
+                    .font(.title3)
+                    .foregroundStyle(.orange)
+                    .accessibilityHidden(true)
+            }
+
+            VStack(alignment: .leading, spacing: Theme.Space.xs) {
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Theme.Colors.primary)
+                Text(error.errorDescription ?? "Please try again.")
+                    .font(Theme.Text.meta)
+                    .foregroundStyle(Theme.Colors.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: Theme.Space.sm)
+
+            if !isLoading {
+                Button("Try again") {
+                    Task { await retry() }
+                }
+                .buttonStyle(.bordered)
+            }
+        }
+        .padding(.horizontal, Theme.Space.screen)
+        .padding(.vertical, Theme.Space.md)
+        .background(Theme.Colors.card, in: RoundedRectangle(cornerRadius: Theme.Radius.card))
+        .padding(.horizontal, Theme.Space.screen)
+        .accessibilityElement(children: .combine)
+    }
+}
+
 /// Small banner for "offline, showing cached data".
 struct OfflineBanner: View {
     var body: some View {

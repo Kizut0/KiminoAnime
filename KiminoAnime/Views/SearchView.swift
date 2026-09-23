@@ -35,6 +35,9 @@ struct SearchView: View {
         .submitLabel(.search)
         .onSubmit(of: .search) { Task { await vm.search(query, safeOnly: safeSearch) } }
         .task { await vm.loadGenresIfNeeded() }
+        .onChange(of: safeSearch) { _, value in
+            Task { await vm.search(query, safeOnly: value) }
+        }
         .task(id: query) {
             guard !query.isEmpty else {
                 if vm.selectedGenreIds.isEmpty {
@@ -111,7 +114,17 @@ private extension SearchView {
                     .matchedTransitionSource(id: anime.malId, in: zoom)
                     .task { await vm.loadMoreIfNeeded(current: anime, safeOnly: safeSearch) }
             }
-            if vm.isLoadingMore { ProgressView().frame(maxWidth: .infinity).listRowBackground(Theme.Colors.background) }
+            if vm.isLoadingMore {
+                ProgressView()
+                    .frame(maxWidth: .infinity)
+                    .listRowBackground(Theme.Colors.background)
+            } else if let error = vm.paginationError {
+                PaginationRetryRow(error: error, isLoading: vm.isLoadingMore) {
+                    await vm.retryLoadMore(safeOnly: safeSearch)
+                }
+                .listRowBackground(Theme.Colors.background)
+                .listRowInsets(EdgeInsets())
+            }
         }
         .listStyle(.plain)
     }

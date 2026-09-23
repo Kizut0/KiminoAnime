@@ -3,35 +3,34 @@
 //  KiminoAnime
 //
 //  T4.6 — used by Discover, Search results and the Detail
-//  recommendations row. The fixed height on the title is deliberate:
-//  without it, one-line and two-line titles produce ragged grids.
+//  recommendations row. Grid cards use the width proposed by their
+//  container; carousel cards can still provide an explicit width.
 //
 
 import SwiftUI
 
 struct PosterCard: View {
     let anime: Anime
-    var width: CGFloat = 150
+    var width: CGFloat?
     var showsScore: Bool = true
-
-    private var height: CGFloat { width / Theme.posterAspect }
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.sm) {
             ZStack(alignment: .topTrailing) {
                 CachedAsyncImage(url: anime.posterURL)
-                    .frame(width: width, height: height)
+                    .frame(maxWidth: .infinity)
                 if showsScore, let score = anime.score, score > 0 {
                     ScoreBadge(score: score)
                         .padding(Theme.Space.sm)
                 }
             }
+            .aspectRatio(Theme.posterAspect, contentMode: .fit)
             Text(anime.displayTitle)
                 .font(Theme.Text.cardTitle)
                 .foregroundStyle(Theme.Colors.primary)
                 .lineLimit(2)
                 .multilineTextAlignment(.leading)
-                .frame(height: 34, alignment: .top)
+                .frame(minHeight: 34, alignment: .top)
             if !anime.metaLine.isEmpty {
                 Text(anime.metaLine)
                     .font(Theme.Text.meta)

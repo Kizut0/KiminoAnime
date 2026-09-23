@@ -1,5 +1,13 @@
 import SwiftUI
 
+private struct DiscoverHeroOffsetKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
 struct DiscoverView: View {
 
     // MARK: - View Model
@@ -23,6 +31,12 @@ struct DiscoverView: View {
 
     @State private var appeared:
         Set<Int> = []
+
+    @State private var heroOffset: CGFloat = 0
+
+    private var heroHasScrolled: Bool {
+        heroOffset < -8
+    }
 
     // MARK: - Body
 
@@ -59,6 +73,9 @@ struct DiscoverView: View {
                     content
                 }
             }
+            .onPreferenceChange(DiscoverHeroOffsetKey.self) {
+                heroOffset = $0
+            }
             .background(
                 Theme
                     .Colors
@@ -68,8 +85,15 @@ struct DiscoverView: View {
                 "Discover"
             )
             .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(vm.hero == nil ? .automatic : .hidden, for: .navigationBar)
-            .toolbarColorScheme(vm.hero == nil ? nil : .dark, for: .navigationBar)
+            .toolbarBackground(
+                vm.hero == nil || heroHasScrolled ? .visible : .hidden,
+                for: .navigationBar
+            )
+            .toolbarBackground(.regularMaterial, for: .navigationBar)
+            .toolbarColorScheme(
+                vm.hero == nil || heroHasScrolled ? nil : .dark,
+                for: .navigationBar
+            )
             .navigationDestination(
                 for: Anime.self
             ) { anime in
@@ -247,6 +271,10 @@ private extension DiscoverView {
                                 * 0.35
                         )
                     }
+                    .preference(
+                        key: DiscoverHeroOffsetKey.self,
+                        value: minY
+                    )
                 }
                 .frame(
                     height: 420
@@ -481,9 +509,7 @@ private extension DiscoverView {
 
                         PosterCard(
                             anime:
-                                anime,
-                            width:
-                                165
+                                anime
                         )
                     }
                     .buttonStyle(
@@ -606,6 +632,10 @@ private extension DiscoverView {
                         .vertical,
                         Theme.Space.lg
                     )
+            } else if let error = vm.paginationError {
+                PaginationRetryRow(error: error, isLoading: vm.isLoadingMore) {
+                    await vm.retryLoadMore(safeOnly: safeSearch)
+                }
             }
         }
     }
