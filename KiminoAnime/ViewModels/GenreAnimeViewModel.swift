@@ -56,15 +56,22 @@ final class GenreAnimeViewModel {
               current.last?.malId == item.malId else { return }
         isLoadingMore = true
         defer { isLoadingMore = false }
-        guard let response = try? await KitsuClient.shared.search(
-            query: "", page: page + 1, genreIds: [genreId], safeOnly: safeOnly
-        ) else {
+        do {
+            let response = try await KitsuClient.shared.search(
+                query: "", page: page + 1, genreIds: [genreId], safeOnly: safeOnly
+            )
+            guard !Task.isCancelled else { return }
+            page += 1
+            canLoadMore = response.pagination?.hasNextPage ?? false
+            let existing = Set(current.map(\.malId))
+            state = .results(current + response.data.filter { !existing.contains($0.malId) })
+        } catch let error as APIError {
+            guard !Task.isCancelled, error != .cancelled else { return }
             canLoadMore = false
+        } catch is CancellationError {
             return
+        } catch {
+            canLoadMore = false
         }
-        page += 1
-        canLoadMore = response.pagination?.hasNextPage ?? false
-        let existing = Set(current.map(\.malId))
-        state = .results(current + response.data.filter { !existing.contains($0.malId) })
     }
 }

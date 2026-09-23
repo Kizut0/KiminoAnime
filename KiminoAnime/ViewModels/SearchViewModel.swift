@@ -77,19 +77,25 @@ final class SearchViewModel {
         let generation = requestGeneration
         isLoadingMore = true
         defer { isLoadingMore = false }
-        guard let response = try? await KitsuClient.shared.search(
-            query: lastQuery, page: page + 1,
-            genreIds: Array(selectedGenreIds), safeOnly: safeOnly
-        ) else {
+        do {
+            let response = try await KitsuClient.shared.search(
+                query: lastQuery, page: page + 1,
+                genreIds: Array(selectedGenreIds), safeOnly: safeOnly
+            )
+            guard generation == requestGeneration, !Task.isCancelled else { return }
+            page += 1
+            canLoadMore = response.pagination?.hasNextPage ?? false
+            let existing = Set(current.map(\.malId))
+            state = .results(current + response.data.filter { !existing.contains($0.malId) })
+        } catch let error as APIError {
+            guard generation == requestGeneration, !Task.isCancelled, error != .cancelled else { return }
+            canLoadMore = false
+        } catch is CancellationError {
+            return
+        } catch {
             guard generation == requestGeneration else { return }
             canLoadMore = false
-            return
         }
-        guard generation == requestGeneration, !Task.isCancelled else { return }
-        page += 1
-        canLoadMore = response.pagination?.hasNextPage ?? false
-        let existing = Set(current.map(\.malId))
-        state = .results(current + response.data.filter { !existing.contains($0.malId) })
     }
 
     func clear() {
