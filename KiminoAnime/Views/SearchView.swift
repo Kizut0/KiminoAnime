@@ -9,6 +9,7 @@ struct SearchView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
+                searchField
                 genreBar
                 Group {
                     switch vm.state {
@@ -36,11 +37,6 @@ struct SearchView: View {
             }
             .navigationDestination(for: Int.self) { DetailView(animeId: $0) }
         }
-        .searchable(text: $query, prompt: "Search 25,000+ titles")
-        .autocorrectionDisabled()
-        .textInputAutocapitalization(.never)
-        .submitLabel(.search)
-        .onSubmit(of: .search) { Task { await vm.search(query, safeOnly: safeSearch) } }
         .task { await vm.loadGenresIfNeeded() }
         .onChange(of: safeSearch) { _, value in
             Task { await vm.search(query, safeOnly: value) }
@@ -62,6 +58,41 @@ struct SearchView: View {
 }
 
 private extension SearchView {
+    var searchField: some View {
+        HStack(spacing: Theme.Space.sm) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(Theme.Colors.secondary)
+                .accessibilityHidden(true)
+
+            TextField("Search 25,000+ titles", text: $query)
+                .font(Theme.Text.body)
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.never)
+                .submitLabel(.search)
+                .onSubmit { Task { await vm.search(query, safeOnly: safeSearch) } }
+                .accessibilityLabel("Search anime by title")
+
+            if !query.isEmpty {
+                Button {
+                    query = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(Theme.Colors.secondary)
+                }
+                .accessibilityLabel("Clear search")
+            }
+        }
+        .padding(.horizontal, Theme.Space.md)
+        .frame(minHeight: 44)
+        .background(Theme.Colors.card, in: RoundedRectangle(cornerRadius: Theme.Radius.card))
+        .overlay {
+            RoundedRectangle(cornerRadius: Theme.Radius.card)
+                .stroke(Theme.Colors.divider, lineWidth: 1)
+        }
+        .padding(.horizontal, Theme.Space.screen)
+        .padding(.top, Theme.Space.sm)
+    }
+
     @ViewBuilder
     var refreshStatus: some View {
         if let error = vm.refreshError {
