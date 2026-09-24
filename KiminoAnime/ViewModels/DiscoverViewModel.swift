@@ -21,17 +21,17 @@ final class DiscoverViewModel {
     private var page = 1
     private var canLoadMore = false
     private var activeFilter: Bool?
+    private var activeSeason: AnimeSeason?
     private var generation = UUID()
-    private let seasonalCacheKey = "seasonal"
     private let topCacheKey = "top"
-    private let seasonalLoader: (Bool) async throws -> AnimeResponse<[Anime]>
+    private let seasonalLoader: (Bool, AnimeSeason) async throws -> AnimeResponse<[Anime]>
     private let topLoader: (Int, Bool) async throws -> AnimeResponse<[Anime]>
     private let readCache: (String) -> [Anime]?
     private let saveCache: ([Anime], String) -> Void
 
     init(
-        seasonalLoader: @escaping (Bool) async throws -> AnimeResponse<[Anime]> = {
-            try await KitsuClient.shared.currentSeason(safeOnly: $0)
+        seasonalLoader: @escaping (Bool, AnimeSeason) async throws -> AnimeResponse<[Anime]> = {
+            try await KitsuClient.shared.currentSeason(safeOnly: $0, season: $1)
         },
         topLoader: @escaping (Int, Bool) async throws -> AnimeResponse<[Anime]> = {
             try await KitsuClient.shared.topAnime(page: $0, safeOnly: $1)
@@ -47,13 +47,34 @@ final class DiscoverViewModel {
 
     var hero: Anime? { seasonal.first }
     private var hasContent: Bool { !seasonal.isEmpty || !top.isEmpty }
+    private func seasonalCacheKey(safeOnly: Bool, season: AnimeSeason) -> String {
+        "kitsu-\(safeOnly)-seasonal-\(season.year)-\(season.name)"
+    }
+
+    private func cachedSeasonal(safeOnly: Bool, season: AnimeSeason) -> [Anime]? {
+        let key = seasonalCacheKey(safeOnly: safeOnly, season: season)
+        if let cached = readCache(key) { return cached }
+
+        // Older app versions used a seasonless key. Reuse it only when every
+        // title confirms that it belongs to the current season.
+        guard let legacy = readCache("kitsu-\(safeOnly)-seasonal"),
+              !legacy.isEmpty,
+              legacy.allSatisfy({ $0.season == season.name && $0.year == season.year })
+        else { return nil }
+        saveCache(legacy, key)
+        return legacy
+    }
 
     func load(safeOnly: Bool) async {
-        guard !isRefreshing || activeFilter != safeOnly else { return }
+        let season = AnimeSeason.current()
+        guard !isRefreshing || activeFilter != safeOnly || activeSeason != season else { return }
         let token = UUID()
         generation = token
         let changedFilter = activeFilter != safeOnly
+        let changedSeason = activeSeason != season
+        let shouldReloadCachedContent = changedFilter || !hasContent
         activeFilter = safeOnly
+        activeSeason = season
         isRefreshing = true
         refreshError = nil
         paginationError = nil
@@ -62,8 +83,10 @@ final class DiscoverViewModel {
 
         // Render saved results before starting any network work. Keep current
         // content during manual refresh, but never mix content-safety filters.
-        if changedFilter || !hasContent {
-            seasonal = readCache("kitsu-\(safeOnly)-" + seasonalCacheKey) ?? []
+        if shouldReloadCachedContent || changedSeason {
+            seasonal = cachedSeasonal(safeOnly: safeOnly, season: season) ?? []
+        }
+        if shouldReloadCachedContent {
             top = readCache("kitsu-\(safeOnly)-" + topCacheKey) ?? []
         }
         isShowingCached = hasContent
@@ -81,19 +104,19 @@ final class DiscoverViewModel {
 
         // Each child publishes its section immediately on completion; neither
         // section waits for the other to finish or fail.
-        async let season: Void = updateSeason(safeOnly: safeOnly, token: token)
+        async let seasonalRequest: Void = updateSeason(safeOnly: safeOnly, season: season, token: token)
         async let rated: Void = updateTop(safeOnly: safeOnly, token: token)
-        _ = await (season, rated)
+        _ = await (seasonalRequest, rated)
         guard generation == token, !Task.isCancelled else { return }
         isShowingCached = hasContent && refreshError != nil
     }
 
-    private func updateSeason(safeOnly: Bool, token: UUID) async {
+    private func updateSeason(safeOnly: Bool, season: AnimeSeason, token: UUID) async {
         do {
-            let response = try await seasonalLoader(safeOnly)
+            let response = try await seasonalLoader(safeOnly, season)
             guard generation == token, !Task.isCancelled else { return }
             seasonal = response.data
-            saveCache(seasonal, "kitsu-\(safeOnly)-" + seasonalCacheKey)
+            saveCache(seasonal, seasonalCacheKey(safeOnly: safeOnly, season: season))
             if hasContent { state = .loaded }
         } catch {
             record(error, token: token)
@@ -206,6 +229,11 @@ final class DiscoverViewModel {
     }
 
     func refresh(safeOnly: Bool) async {
+        await load(safeOnly: safeOnly)
+    }
+
+    func refreshSeasonIfNeeded(safeOnly: Bool) async {
+        guard activeSeason != AnimeSeason.current() else { return }
         await load(safeOnly: safeOnly)
     }
 }

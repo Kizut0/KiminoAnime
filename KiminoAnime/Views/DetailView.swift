@@ -13,17 +13,22 @@ struct DetailView: View {
     init(anime: Anime) { seed = anime; animeId = anime.malId }
     init(animeId: Int) { seed = nil; self.animeId = animeId }
 
+    private var diskCachedDetail: Anime? {
+        guard let cached = DiskCache.load(OfflineCacheKey.detail(animeId), as: Anime.self),
+              cached.malId == animeId
+        else { return nil }
+        return cached
+    }
+
     private var availableAnime: Anime? {
         let saved = store.entry(for: animeId)
-        if let saved, saved.detailData != nil { return saved.offlineAnime }
-        return DiskCache.load(OfflineCacheKey.detail(animeId), as: Anime.self)
-            ?? saved?.offlineAnime ?? seed
+        return saved?.decodedDetail ?? diskCachedDetail ?? saved?.offlineAnime ?? seed
     }
 
     private func refreshDetails() async {
         let saved = store.entry(for: animeId)
-        if let saved, saved.detailData == nil,
-           let cached = DiskCache.load(OfflineCacheKey.detail(animeId), as: Anime.self) {
+        if let saved, saved.decodedDetail == nil,
+           let cached = diskCachedDetail {
             store.cacheDetail(cached)
         }
         await vm.load(
@@ -282,7 +287,9 @@ private extension DetailView {
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(spacing: Theme.Space.md) {
                         ForEach(vm.recommendations) { rec in
-                            NavigationLink(value: rec.entry.malId) {
+                            NavigationLink {
+                                DetailView(anime: rec.entry)
+                            } label: {
                                 VStack(alignment: .leading, spacing: Theme.Space.sm) {
                                     CachedAsyncImage(url: rec.entry.posterURL).frame(width: 110, height: 165)
                                     Text(rec.entry.title).font(.caption.weight(.medium)).foregroundStyle(Theme.Colors.primary).lineLimit(2).frame(width: 110, alignment: .leading)

@@ -23,6 +23,9 @@ struct DiscoverView: View {
     @Environment(\.accessibilityReduceMotion)
     private var reduceMotion
 
+    @Environment(\.scenePhase)
+    private var scenePhase
+
     // MARK: - Navigation Transition
 
     @Namespace private var zoom
@@ -112,6 +115,10 @@ struct DiscoverView: View {
         }
         .task(id: safeSearch) {
             await vm.load(safeOnly: safeSearch)
+        }
+        .onChange(of: scenePhase) { _, phase in
+            guard phase == .active else { return }
+            Task { await vm.refreshSeasonIfNeeded(safeOnly: safeSearch) }
         }
     }
 

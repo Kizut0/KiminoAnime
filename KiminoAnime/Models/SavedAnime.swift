@@ -150,13 +150,18 @@ final class SavedAnime {
 
 @MainActor
 extension SavedAnime {
+    var decodedDetail: Anime? {
+        guard let detailData,
+              let anime = try? JSONDecoder().decode(Anime.self, from: detailData),
+              anime.malId == malId
+        else { return nil }
+        return anime
+    }
+
     /// Prefer the last full API response; older records still have the
     /// original summary fields until they can be refreshed online.
     var offlineAnime: Anime {
-        if let detailData,
-           let cached = try? JSONDecoder().decode(Anime.self, from: detailData) {
-            return cached
-        }
+        if let decodedDetail { return decodedDetail }
 
         let imageSet = AnimeImages.ImageSet(
             imageUrl: imageUrl,

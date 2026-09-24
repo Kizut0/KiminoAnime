@@ -1,5 +1,18 @@
 import Foundation
 
+nonisolated struct AnimeSeason: Equatable {
+    let year: Int
+    let name: String
+
+    static func current(at date: Date = .now) -> Self {
+        let calendar = Calendar(identifier: .gregorian)
+        let month = calendar.component(.month, from: date)
+        let year = calendar.component(.year, from: date)
+        let name = ["winter", "spring", "summer", "fall"][(month - 1) / 3]
+        return Self(year: year, name: name)
+    }
+}
+
 actor KitsuClient {
     static let shared = KitsuClient()
     private let session: URLSession
@@ -82,11 +95,9 @@ actor KitsuClient {
         try await self.page(page, safeOnly: safeOnly, firstLoad: page == 1, query: [.init(name: "sort", value: "-averageRating")])
     }
 
-    func currentSeason(page: Int = 1, safeOnly: Bool = true) async throws -> AnimeResponse<[Anime]> {
-        let date = Calendar(identifier: .gregorian).dateComponents([.month, .year], from: Date())
-        let season = ["winter", "spring", "summer", "fall"][((date.month ?? 1) - 1) / 3]
+    func currentSeason(page: Int = 1, safeOnly: Bool = true, season: AnimeSeason = .current()) async throws -> AnimeResponse<[Anime]> {
         return try await self.page(page, safeOnly: safeOnly, firstLoad: true, query: [
-            .init(name: "filter[season]", value: season), .init(name: "filter[seasonYear]", value: String(date.year ?? 2026)),
+            .init(name: "filter[season]", value: season.name), .init(name: "filter[seasonYear]", value: String(season.year)),
             .init(name: "sort", value: "-userCount")])
     }
 
